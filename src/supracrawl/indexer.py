@@ -113,7 +113,9 @@ class Indexer:
                     vectors=vectors,
                 )
                 if vector_doc_id != doc_id:
-                    raise SearchBackendError("vector document identity does not match lexical identity")
+                    raise SearchBackendError(
+                        "vector document identity does not match lexical identity"
+                    )
                 vector_indexed = True
             except (EmbeddingBackendError, SearchBackendError, ValueError) as exc:
                 # Lexical indexing is authoritative. A vector-side failure is
