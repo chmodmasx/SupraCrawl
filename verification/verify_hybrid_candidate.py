@@ -10,11 +10,6 @@ from typing import Any
 import numpy as np
 from fastembed import TextEmbedding
 from fastembed.common.model_description import ModelSource, PoolingType
-
-from supracrawl.config import Settings
-from supracrawl.evaluation import RetrievalMetrics, evaluate_ranking, macro_average
-from supracrawl.fusion import reciprocal_rank_fusion
-from supracrawl.search import OpenSearchStore
 from verify_retrieval_baseline import (
     _delete_index,
     _load_jsonl,
@@ -22,6 +17,11 @@ from verify_retrieval_baseline import (
     _seed_corpus,
     _validate_fixture,
 )
+
+from supracrawl.config import Settings
+from supracrawl.evaluation import RetrievalMetrics, evaluate_ranking, macro_average
+from supracrawl.fusion import reciprocal_rank_fusion
+from supracrawl.search import OpenSearchStore
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_PATH = ROOT / "evaluation" / "corpus.jsonl"
@@ -259,7 +259,6 @@ async def _run() -> None:
             )
 
         bm25_aggregate = macro_average(bm25_metrics)
-        dense_aggregate = macro_average(dense_metrics)
         hybrid_aggregate = macro_average(hybrid_metrics)
         p95_hybrid_latency_ms = _percentile(hybrid_latencies, 0.95)
 
