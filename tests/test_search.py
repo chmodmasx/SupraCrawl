@@ -45,6 +45,8 @@ async def test_index_document_writes_document_and_chunks_then_removes_stale_chun
 
     async def fake_request(method: str, path: str, **kwargs):
         calls.append((method, path, kwargs))
+        if method == "HEAD":
+            return httpx.Response(200)
         if path.startswith("/_bulk"):
             return httpx.Response(200, json={"errors": False, "items": []})
         if "_delete_by_query" in path:
@@ -87,9 +89,11 @@ async def test_index_document_writes_document_and_chunks_then_removes_stale_chun
 
     assert doc_id == document_id("https://example.com/article")
     assert count == 1
-    assert len(calls) == 2
+    assert len(calls) == 4
+    assert calls[0][:2] == ("HEAD", f"/{settings.opensearch_documents_index}")
+    assert calls[1][:2] == ("HEAD", f"/{settings.opensearch_chunks_index}")
 
-    bulk_method, bulk_path, bulk_kwargs = calls[0]
+    bulk_method, bulk_path, bulk_kwargs = calls[2]
     assert bulk_method == "POST"
     assert bulk_path == "/_bulk?refresh=wait_for"
     bulk_lines = bulk_kwargs["content"].decode("utf-8").strip().splitlines()
@@ -105,7 +109,7 @@ async def test_index_document_writes_document_and_chunks_then_removes_stale_chun
     assert chunk_source["document_id"] == doc_id
     assert chunk_source["section_path"] == "Heading"
 
-    cleanup_method, cleanup_path, cleanup_kwargs = calls[1]
+    cleanup_method, cleanup_path, cleanup_kwargs = calls[3]
     assert cleanup_method == "POST"
     assert cleanup_path.startswith(f"/{settings.opensearch_chunks_index}/_delete_by_query")
     must_not = cleanup_kwargs["json"]["query"]["bool"]["must_not"]
