@@ -144,12 +144,12 @@ class OpenSearchStore:
             },
         }
 
-    async def ensure_indices(self) -> None:
-        if self._indices_ready:
+    async def ensure_indices(self, validate: bool = False) -> None:
+        if self._indices_ready and not validate:
             return
 
         async with self._indices_lock:
-            if self._indices_ready:
+            if self._indices_ready and not validate:
                 return
 
             definitions = (
@@ -180,7 +180,9 @@ class OpenSearchStore:
         chunks: list[Chunk],
         content_hash: str,
     ) -> tuple[str, int]:
-        await self.ensure_indices()
+        # Validate on writes: OpenSearch's bulk API can otherwise auto-create a
+        # deleted index with dynamic mappings before a 404 can be observed.
+        await self.ensure_indices(validate=True)
 
         canonical_url = normalize_url(extraction.canonical_url or fetched.final_url)
         identity_url = canonical_identity_url(fetched.final_url, canonical_url)
