@@ -247,11 +247,16 @@ class SearchService:
             return []
 
         index_name = self.settings.opensearch_documents_index
-        response = await self.store._request_with_index_recovery(
-            "POST",
-            f"/{index_name}/_mget",
-            json={"ids": list(expected_hashes)},
-        )
+        try:
+            response = await self.store._request_with_index_recovery(
+                "POST",
+                f"/{index_name}/_mget",
+                json={"ids": list(expected_hashes)},
+            )
+        except SearchBackendError as exc:
+            raise SearchBackendError(
+                f"OpenSearch current-content validation failed: {exc}"
+            ) from exc
         if response.status_code >= 400:
             raise SearchBackendError(
                 f"OpenSearch current-content validation failed: HTTP {response.status_code}"
