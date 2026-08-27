@@ -130,7 +130,12 @@ class DenseEmbedder:
         )
         return vectors[0]
 
-    async def embed_passages(self, passages: Sequence[str], *, batch_size: int = 16) -> list[list[float]]:
+    async def embed_passages(
+        self,
+        passages: Sequence[str],
+        *,
+        batch_size: int = 16,
+    ) -> list[list[float]]:
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
         texts = [passage for passage in passages if passage.strip()]
