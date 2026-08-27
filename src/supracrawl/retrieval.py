@@ -80,7 +80,7 @@ class SearchService:
         try:
             dense = await self._dense_search(query, candidate_limit)
             dense = await self._filter_current_dense_results(dense)
-        except (EmbeddingBackendError, SearchBackendError) as exc:
+        except (EmbeddingBackendError, SearchBackendError, ValueError) as exc:
             return self._degraded(
                 lexical,
                 limit,
