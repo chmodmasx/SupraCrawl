@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "benchmark": "supracrawl-bm25-v1",
+  "minimum_queries": 16,
+  "reference": {
+    "mrr_at_10": 0.84375,
+    "recall_at_5": 0.875,
+    "ndcg_at_10": 0.840367,
+    "p95_latency_ms": 59.465,
+    "mean_description_tokens_top5": 237.25,
+    "source_head_sha": "e50dbbcb1b827cfaa46b1a5c44b1fffd8d35fa94",
+    "source_pr_merge_sha": "b4f140a9288ef804407e72bb55157cf01f564f5f"
+  },
+  "mrr_at_10_min": 0.84,
+  "recall_at_5_min": 0.87,
+  "ndcg_at_10_min": 0.84,
+  "p95_latency_ms_max": 500.0,
+  "mean_description_tokens_top5_max": 260.0,
+  "note": "Reference measured on the pinned OpenSearch 3.8.0 live benchmark with 16 queries, including graded multi-relevance and cross-language cases. Relevance floors allow only small rounding-level regression; latency and context limits retain runner/operational headroom. Do not loosen without a documented relevance or performance investigation."
+}
