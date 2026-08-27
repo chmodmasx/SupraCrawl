@@ -155,10 +155,50 @@ async def test_vector_index_writes_provenance_and_removes_stale_chunks(monkeypat
     assert source["embedding_model"] == "test/e5-small"
     assert source["embedding_dimension"] == 3
     assert source["embedding"] == pytest.approx([0.1, 0.2, 0.3])
+    mapping_reads = [
+        call for call in calls if call[0] == "GET" and call[1].endswith("/_mapping")
+    ]
+    assert len(mapping_reads) == 2
     cleanup = next(call for call in calls if "_delete_by_query" in call[1])
     assert cleanup[2]["json"]["query"]["bool"]["must_not"] == [
         {"term": {"content_hash": "a" * 64}}
     ]
+
+
+@pytest.mark.asyncio
+async def test_vector_mapping_race_after_bulk_fails_closed(monkeypatch) -> None:
+    store = OpenSearchStore(_settings())
+    fetched, extraction, chunks = _fixture()
+    mapping_reads = 0
+
+    async def fake_request(method: str, path: str, **_kwargs):
+        nonlocal mapping_reads
+        if method == "HEAD":
+            return httpx.Response(200)
+        if method == "GET" and path.endswith("/_mapping"):
+            mapping_reads += 1
+            payload = _mapping_payload(store)
+            if mapping_reads == 2:
+                payload[store.settings.opensearch_vector_chunks_index]["mappings"][
+                    "_meta"
+                ]["embedding_model"] = "auto-created/incompatible"
+            return httpx.Response(200, json=payload)
+        if path.startswith("/_bulk"):
+            return httpx.Response(200, json={"errors": False, "items": []})
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    monkeypatch.setattr(store, "_request", fake_request)
+
+    with pytest.raises(SearchBackendError, match="embedding_model"):
+        await store.index_vector_document(
+            fetched=fetched,
+            extraction=extraction,
+            chunks=chunks,
+            content_hash="a" * 64,
+            vectors=[[0.1, 0.2, 0.3]],
+        )
+
+    assert mapping_reads == 2
 
 
 @pytest.mark.asyncio
