@@ -107,6 +107,10 @@ Phase 3D cannot close unless all of the following are true on one exact candidat
 12. Compose teardown is clean.
 13. No known blocker or high-severity defect remains in the defined Phase 3D scope.
 
+## Known residual limitation
+
+Lexical and vector replacement are each serialized per document inside one SupraCrawl process, but Phase 3D does not make the two OpenSearch index replacements one cross-index transaction. Two concurrent refreshes of the same document can therefore leave a physically stale vector generation after the newer lexical generation wins. The mandatory read-time `content_hash` validation prevents that stale generation from being served as current content, so the failure mode is temporary dense-recall loss rather than stale-content leakage. A later successful vector refresh repairs the vector generation. Cross-index transactional or generation-aware refresh ordering is explicitly deferred to a separate hardening gate rather than being added after Phase 3D measurement.
+
 ## Promotion boundary
 
 A Phase 3D PASS means only that `hybrid` is certified as a production-capable opt-in retrieval mode with BM25 fallback. It **does not** authorize changing the global default from `bm25` to `hybrid`.
