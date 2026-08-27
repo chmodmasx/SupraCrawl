@@ -709,7 +709,9 @@ class OpenSearchStore:
             payload = response.json()
             hits = payload["hits"]["hits"]
         except (KeyError, TypeError, ValueError) as exc:
-            raise SearchBackendError("OpenSearch dense search returned an invalid response") from exc
+            raise SearchBackendError(
+                "OpenSearch dense search returned an invalid response"
+            ) from exc
         if not isinstance(hits, list):
             raise SearchBackendError("OpenSearch dense search returned invalid hits")
         return self._format_hits(hits, vector_metadata=True)
