@@ -4,9 +4,10 @@ import asyncio
 import hashlib
 import json
 import re
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
