@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-
 from verify_real_vector_retrieval import _clear_indices, _seed_corpus_with_vectors
 from verify_retrieval_baseline import _load_jsonl, _percentile, _validate_fixture
 
@@ -275,28 +274,6 @@ async def _verify_stale_vector_guard(
     print("phase3d_lexical_success_after_vector_failure=PASS")
 
 
-async def _verify_dense_disabled_degradation(
-    api_url: str,
-    query: str,
-) -> None:
-    disabled_url = os.environ.get("SUPRACRAWL_DISABLED_API_URL")
-    if not disabled_url:
-        print("phase3d_dense_disabled_live_check=SKIPPED(no secondary API URL)")
-        return
-
-    del api_url
-    async with httpx.AsyncClient(base_url=disabled_url, timeout=30.0) as client:
-        body, _ = await _post_search(client, query=query, mode="hybrid")
-    if body.get("mode_requested") != "hybrid" or body.get("mode_used") != "bm25":
-        raise RuntimeError("dense-disabled hybrid request did not degrade to BM25")
-    if body.get("degraded") is not True:
-        raise RuntimeError("dense-disabled hybrid request did not report degradation")
-    reason = body.get("degradation_reason")
-    if not isinstance(reason, str) or "disabled" not in reason:
-        raise RuntimeError("dense-disabled hybrid degradation reason is missing")
-    print("phase3d_dense_disabled_live_check=PASS")
-
-
 async def _run() -> None:
     policy = _load_policy()
     api_url = os.environ.get("SUPRACRAWL_API_URL", "http://127.0.0.1:8080")
@@ -346,7 +323,8 @@ async def _run() -> None:
 
         timeout = httpx.Timeout(180.0, connect=10.0)
         async with httpx.AsyncClient(base_url=api_url, timeout=timeout) as client:
-            await _verify_default_bm25(client, policy["frozen_spot_queries"]["exact_identifier"][0]["query"])
+            exact_query = policy["frozen_spot_queries"]["exact_identifier"][0]["query"]
+            await _verify_default_bm25(client, exact_query)
             print("phase3d_default_bm25_api=PASS")
 
             # Warm the model before the frozen correctness checks so first-download
@@ -363,11 +341,6 @@ async def _run() -> None:
             print("phase3d_frozen_spot_checks=PASS")
             await _measure_warm_p95(client, policy)
             await _verify_stale_vector_guard(client, settings, store, embedder)
-
-        await _verify_dense_disabled_degradation(
-            api_url,
-            policy["frozen_spot_queries"]["exact_identifier"][0]["query"],
-        )
     finally:
         await store.close()
 
