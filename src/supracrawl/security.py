@@ -45,7 +45,12 @@ async def validate_public_url(url: str) -> None:
             raise UnsafeUrlError("Private or non-routable IP addresses are not allowed")
         return
 
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        explicit_port = parsed.port
+    except ValueError as exc:
+        raise UnsafeUrlError("URL contains an invalid port") from exc
+    port = explicit_port or (443 if parsed.scheme == "https" else 80)
+
     loop = asyncio.get_running_loop()
     try:
         answers = await loop.getaddrinfo(hostname, port)

@@ -19,11 +19,13 @@ class JsonCache:
             return None
         try:
             value = await self.redis.get(key)
+            if value is None:
+                return None
+            decoded = orjson.loads(value)
+            return decoded if isinstance(decoded, dict) else None
         except Exception:
+            # Cache corruption or Redis outages must never break extraction.
             return None
-        if value is None:
-            return None
-        return orjson.loads(value)
 
     async def set(self, key: str, value: dict) -> None:
         if not self.redis or self.ttl_s <= 0:

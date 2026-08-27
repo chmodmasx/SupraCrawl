@@ -16,9 +16,14 @@ def normalize_url(url: str) -> str:
     scheme = parsed.scheme.lower()
     host = (parsed.hostname or "").rstrip(".").lower()
 
-    port = parsed.port
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("URL contains an invalid port") from exc
+
     default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
-    netloc = host if port is None or default_port else f"{host}:{port}"
+    host_for_netloc = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    netloc = host_for_netloc if port is None or default_port else f"{host_for_netloc}:{port}"
 
     query = []
     for key, value in parse_qsl(parsed.query, keep_blank_values=True):
