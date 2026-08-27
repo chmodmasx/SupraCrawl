@@ -111,7 +111,9 @@ async def _verify_physical_stale_vector(
     if not isinstance(results, list):
         raise RuntimeError("stale-vector hybrid search returned no results list")
     returned_urls = {
-        item.get("url") for item in results if isinstance(item, dict) and isinstance(item.get("url"), str)
+        item.get("url")
+        for item in results
+        if isinstance(item, dict) and isinstance(item.get("url"), str)
     }
     if STALE_URL in returned_urls:
         raise RuntimeError("physical stale vector leaked through current-content hash validation")
@@ -171,7 +173,10 @@ async def _verify_production_index_endpoint(
     if not isinstance(results, list):
         raise RuntimeError("post-index search returned no results list")
     urls = [item.get("url") for item in results if isinstance(item, dict)]
-    if not any(isinstance(url, str) and url.rstrip("/") == EXAMPLE_URL.rstrip("/") for url in urls):
+    if not any(
+        isinstance(url, str) and url.rstrip("/") == EXAMPLE_URL.rstrip("/")
+        for url in urls
+    ):
         raise RuntimeError("production-indexed Example Domain was not retrievable")
 
     print("phase3d_production_index_endpoint_vector_write=PASS")
