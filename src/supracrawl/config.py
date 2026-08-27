@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     opensearch_documents_index: str = "supracrawl-documents-v1"
     opensearch_chunks_index: str = "supracrawl-chunks-v1"
 
+    dense_enabled: bool = False
+    dense_model_name: str = "intfloat/multilingual-e5-small"
+    dense_dimension: int = Field(default=384, ge=1, le=65_535)
+    dense_query_prefix: str = "query: "
+    dense_passage_prefix: str = "passage: "
+    opensearch_vector_chunks_index: str = "supracrawl-vector-chunks-v1"
+
 
 @lru_cache
 def get_settings() -> Settings:
