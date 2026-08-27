@@ -41,6 +41,67 @@ class ExtractResponse(BaseModel):
     documents: list[ExtractedDocument]
 
 
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class SearchResult(BaseModel):
+    title: str
+    url: str
+    description: str
+    position: int = Field(ge=1)
+    score: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SearchResponse(BaseModel):
+    success: bool = True
+    results: list[SearchResult]
+
+
+class IndexRequest(BaseModel):
+    urls: list[HttpUrl] = Field(min_length=1, max_length=50)
+
+
+class IndexItem(BaseModel):
+    url: str
+    indexed: bool
+    document_id: str | None = None
+    content_hash: str | None = None
+    chunks_indexed: int = Field(default=0, ge=0)
+    error: str | None = None
+
+
+class IndexResponse(BaseModel):
+    success: bool = True
+    items: list[IndexItem]
+
+
+class CrawlRequest(BaseModel):
+    seeds: list[HttpUrl] = Field(min_length=1, max_length=10)
+    max_pages: int = Field(default=25, ge=1, le=100)
+    max_depth: int = Field(default=1, ge=0, le=3)
+    same_origin: bool = True
+
+
+class CrawlPage(BaseModel):
+    url: str
+    depth: int = Field(ge=0)
+    indexed: bool
+    document_id: str | None = None
+    content_hash: str | None = None
+    chunks_indexed: int = Field(default=0, ge=0)
+    error: str | None = None
+
+
+class CrawlResponse(BaseModel):
+    success: bool = True
+    pages_visited: int = Field(ge=0)
+    pages_indexed: int = Field(ge=0)
+    pages: list[CrawlPage]
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service: str = "SupraCrawl"
