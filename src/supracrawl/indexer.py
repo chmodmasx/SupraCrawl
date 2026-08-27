@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from .chunking import chunk_markdown
 from .config import Settings
+from .embeddings import DenseEmbedder, EmbeddingBackendError, build_passage_text
 from .extractor import Extraction, Extractor, content_hash
 from .fetcher import FetchError, FetchResult
 from .search import OpenSearchStore, SearchBackendError
@@ -17,14 +18,31 @@ class IndexOutcome:
     document_id: str | None = None
     content_hash: str | None = None
     chunks_indexed: int = 0
+    vector_indexed: bool | None = None
+    vector_chunks_indexed: int = 0
+    vector_error: str | None = None
     error: str | None = None
 
 
 class Indexer:
-    def __init__(self, settings: Settings, extractor: Extractor, store: OpenSearchStore) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        extractor: Extractor,
+        store: OpenSearchStore,
+        embedder: DenseEmbedder | None = None,
+    ) -> None:
         self.settings = settings
         self.extractor = extractor
         self.store = store
+        self.embedder = embedder
+        if settings.dense_enabled and self.embedder is None:
+            self.embedder = DenseEmbedder(
+                model_name=settings.dense_model_name,
+                dimension=settings.dense_dimension,
+                query_prefix=settings.dense_query_prefix,
+                passage_prefix=settings.dense_passage_prefix,
+            )
 
     async def index_url(self, url: str) -> IndexOutcome:
         try:
@@ -69,10 +87,48 @@ class Indexer:
                 error=str(exc),
             )
 
+        vector_indexed: bool | None = None
+        vector_chunks_indexed = 0
+        vector_error: str | None = None
+        if self.settings.dense_enabled:
+            vector_indexed = False
+            try:
+                if self.embedder is None:
+                    raise EmbeddingBackendError("dense embedder is not configured")
+                passages = [
+                    build_passage_text(
+                        title=extraction.title,
+                        section_path=chunk.section_path,
+                        text=chunk.text,
+                        prefix=self.settings.dense_passage_prefix,
+                    )
+                    for chunk in chunks
+                ]
+                vectors = await self.embedder.embed_passages(passages)
+                vector_doc_id, vector_chunks_indexed = await self.store.index_vector_document(
+                    fetched=fetched,
+                    extraction=extraction,
+                    chunks=chunks,
+                    content_hash=digest,
+                    vectors=vectors,
+                )
+                if vector_doc_id != doc_id:
+                    raise SearchBackendError("vector document identity does not match lexical identity")
+                vector_indexed = True
+            except (EmbeddingBackendError, SearchBackendError, ValueError) as exc:
+                # Lexical indexing is authoritative. A vector-side failure is
+                # reported but must not erase a successful BM25 write. Hybrid
+                # reads independently reject stale vectors by current content hash.
+                vector_error = str(exc)
+                vector_chunks_indexed = 0
+
         return IndexOutcome(
             url=fetched.final_url,
             indexed=True,
             document_id=doc_id,
             content_hash=digest,
             chunks_indexed=chunks_indexed,
+            vector_indexed=vector_indexed,
+            vector_chunks_indexed=vector_chunks_indexed,
+            vector_error=vector_error,
         )
