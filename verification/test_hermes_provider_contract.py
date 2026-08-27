@@ -94,3 +94,25 @@ async def test_provider_returns_per_url_errors_on_backend_failure(monkeypatch) -
     assert isinstance(result, list)
     assert len(result) == 2
     assert all(item["error"] == "SUPRACRAWL_URL is not configured" for item in result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_timeout", ["0", "-1", "nan", "inf", "-inf", "not-a-number"])
+async def test_provider_rejects_non_positive_or_non_finite_timeout(
+    monkeypatch, invalid_timeout: str
+) -> None:
+    values = {
+        "SUPRACRAWL_URL": "http://supracrawl:8080",
+        "SUPRACRAWL_TIMEOUT_S": invalid_timeout,
+    }
+    monkeypatch.setattr(
+        provider_module,
+        "get_provider_env",
+        lambda name: values.get(name, ""),
+    )
+
+    provider = SupraCrawlWebSearchProvider()
+    result = await provider.extract(["https://example.com/"])
+
+    assert len(result) == 1
+    assert result[0]["error"] == "SUPRACRAWL_TIMEOUT_S must be a positive finite number"

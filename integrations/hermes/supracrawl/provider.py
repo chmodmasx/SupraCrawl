@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import httpx
@@ -34,10 +35,10 @@ class SupraCrawlWebSearchProvider(WebSearchProvider):
         timeout_raw = get_provider_env("SUPRACRAWL_TIMEOUT_S") or "20"
         try:
             timeout = float(timeout_raw)
-            if timeout <= 0:
+            if not math.isfinite(timeout) or timeout <= 0:
                 raise ValueError
         except ValueError:
-            return self._errors(urls, "SUPRACRAWL_TIMEOUT_S must be a positive number")
+            return self._errors(urls, "SUPRACRAWL_TIMEOUT_S must be a positive finite number")
 
         payload: dict[str, Any] = {"urls": urls}
 

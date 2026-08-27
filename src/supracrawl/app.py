@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from pydantic import ValidationError
 
 from . import __version__
 from .cache import JsonCache
@@ -48,8 +49,14 @@ async def extract(request: ExtractRequest) -> ExtractResponse:
         if not request.force_refresh:
             cached = await cache.get(cache_key)
             if cached:
-                documents.append(ExtractedDocument.model_validate(cached))
-                continue
+                try:
+                    cached_document = ExtractedDocument.model_validate(cached)
+                except ValidationError:
+                    # A stale/corrupt-but-valid JSON object must behave as a cache miss.
+                    pass
+                else:
+                    documents.append(cached_document)
+                    continue
 
         try:
             fetched, result = await extractor.extract(url)

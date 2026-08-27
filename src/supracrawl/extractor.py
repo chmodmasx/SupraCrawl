@@ -72,11 +72,18 @@ class Extractor:
         except (httpx.HTTPError, ValueError):
             return None
 
-        markdown = str(data.get("markdown") or "").strip()
+        if not isinstance(data, dict):
+            return None
+        markdown_value = data.get("markdown")
+        if not isinstance(markdown_value, str):
+            return None
+        markdown = markdown_value.strip()
         if not markdown:
             return None
+        title_value = data.get("title")
+        title = title_value.strip() if isinstance(title_value, str) else ""
         return Extraction(
-            title=str(data.get("title") or "").strip(),
+            title=title,
             markdown=markdown,
             canonical_url=normalize_url(url),
             extractor="readability" + ("+playwright" if render else ""),
