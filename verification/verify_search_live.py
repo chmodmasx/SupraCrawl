@@ -115,12 +115,16 @@ def main() -> None:
     example_doc_id = example_item.get("document_id")
     assert isinstance(example_doc_id, str) and example_doc_id, example_item
 
-    # BM25 should retrieve the exact Example Domain language above unrelated quotes.
-    results = _search("illustrative examples in documents", limit=5)
+    # Query body terms that distinguish Example Domain from the unrelated quote corpus.
+    query = "documentation examples permission"
+    results = _search(query, limit=5)
     assert results, results
     assert urllib.parse.urlsplit(results[0]["url"]).hostname == "example.com", results
     assert results[0]["position"] == 1, results
-    assert "illustrative" in results[0]["description"].lower(), results[0]
+    description = results[0]["description"].lower()
+    assert description and len(description) <= 600, results[0]
+    expected_terms = {"documentation", "examples", "permission"}
+    assert len(expected_terms.intersection(description.split())) >= 2, results[0]
 
     documents_count = _opensearch(f"/{DOCUMENTS_INDEX}/_count").get("count")
     chunks_count = _opensearch(f"/{CHUNKS_INDEX}/_count").get("count")
@@ -179,14 +183,14 @@ def main() -> None:
     status, failure = _json_request(
         BASE_URL,
         "/v1/search",
-        {"query": "illustrative examples", "limit": 5},
+        {"query": query, "limit": 5},
     )
     assert status == 503, (status, failure)
     assert "OpenSearch" in str(failure), failure
 
     _compose("start", "opensearch")
     _wait_opensearch()
-    recovered = _search("illustrative examples in documents", limit=5)
+    recovered = _search(query, limit=5)
     assert recovered and urllib.parse.urlsplit(recovered[0]["url"]).hostname == "example.com"
 
     print("Phase 2 live verification: PASS")
