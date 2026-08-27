@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 
 from . import __version__
 from .cache import JsonCache
@@ -54,9 +54,21 @@ async def extract(request: ExtractRequest) -> ExtractResponse:
         try:
             fetched, result = await extractor.extract(url)
         except UnsafeUrlError as exc:
-            raise HTTPException(status_code=400, detail=f"Unsafe URL: {exc}") from exc
+            documents.append(
+                ExtractedDocument(
+                    url=url,
+                    error=f"Unsafe URL: {exc}",
+                )
+            )
+            continue
         except FetchError as exc:
-            raise HTTPException(status_code=422, detail=f"Fetch failed for {url}: {exc}") from exc
+            documents.append(
+                ExtractedDocument(
+                    url=url,
+                    error=f"Fetch failed: {exc}",
+                )
+            )
+            continue
 
         chunks = chunk_markdown(result.markdown)
         selected = select_chunks(

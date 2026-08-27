@@ -29,10 +29,11 @@ class ExtractMetadata(BaseModel):
 
 class ExtractedDocument(BaseModel):
     url: str
-    title: str
-    content: str
+    title: str = ""
+    content: str = ""
     raw_content: str = ""
-    metadata: ExtractMetadata
+    metadata: ExtractMetadata | None = None
+    error: str | None = None
 
 
 class ExtractResponse(BaseModel):
