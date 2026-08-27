@@ -132,6 +132,24 @@ async def test_vector_failure_degrades_without_masking_lexical_results(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_vector_value_error_degrades_without_masking_lexical_results(monkeypatch) -> None:
+    settings = Settings(dense_enabled=True)
+    store = _Store([_result("doc-a", 1)])
+    service = SearchService(settings, store, _Embedder())  # type: ignore[arg-type]
+
+    async def invalid_dense(_query: str, _limit: int) -> list[dict]:
+        raise ValueError("query must not be empty")
+
+    monkeypatch.setattr(service, "_dense_search", invalid_dense)
+    execution = await service.search("   ", 5, mode="hybrid")
+
+    assert execution.mode_used == "bm25"
+    assert execution.degraded is True
+    assert "query must not be empty" in (execution.degradation_reason or "")
+    assert [_result_id(item) for item in execution.results] == ["doc-a"]
+
+
+@pytest.mark.asyncio
 async def test_lexical_failure_is_not_hidden_by_hybrid() -> None:
     class BrokenStore(_Store):
         async def search(self, _query: str, _limit: int) -> list[dict]:
