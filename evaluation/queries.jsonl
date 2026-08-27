@@ -1,0 +1,14 @@
+{"id":"q01-hermes-provider","language":"en","query":"Hermes WebSearchProvider supports_search supports_extract","relevance":{"hermes-web-provider":3}}
+{"id":"q02-bm25-fields","language":"en","query":"OpenSearch BM25 title heading chunk text ranking","relevance":{"opensearch-bm25":3}}
+{"id":"q03-busqueda-bm25","language":"es","query":"búsqueda léxica BM25 OpenSearch título encabezados fragmentos","relevance":{"spanish-bm25":3}}
+{"id":"q04-playwright-fallback","language":"en","query":"Playwright Chromium JavaScript rendering fallback dynamic page","relevance":{"playwright-rendering":3}}
+{"id":"q05-extraccion-limpia","language":"es","query":"extracción HTML Markdown limpio eliminar scripts estilos navegación","relevance":{"spanish-extraction":3}}
+{"id":"q06-ssrf","language":"en","query":"block localhost private LAN metadata SSRF unsafe redirects","relevance":{"ssrf-security":3}}
+{"id":"q07-robots","language":"en","query":"robots.txt user agent fail closed server errors oversized response","relevance":{"robots-policy":3}}
+{"id":"q08-stale-chunks","language":"en","query":"delete_by_query stale chunks content hash reindex document","relevance":{"stale-chunk-reindex":3}}
+{"id":"q09-result-collapse","language":"en","query":"collapse OpenSearch results document_id duplicate chunks positions","relevance":{"result-collapse":3}}
+{"id":"q10-redis-cache","language":"en","query":"Redis cache TTL force refresh unavailable non fatal","relevance":{"redis-cache":3}}
+{"id":"q11-concurrent-reindex","language":"en","query":"asyncio lock same document concurrent reindex refresh","relevance":{"asyncio-locks":3}}
+{"id":"q12-observability","language":"en","query":"p50 p95 latency OpenTelemetry Prometheus Grafana search metrics","relevance":{"observability":3}}
+{"id":"q13-cross-language-rrf","language":"es","query":"fusionar resultados de dos buscadores sin entrenar un modelo","relevance":{"rrf-hybrid":3}}
+{"id":"q14-cross-language-dense","language":"es","query":"representaciones numéricas multilingües para similitud semántica","relevance":{"dense-embeddings":3}}
