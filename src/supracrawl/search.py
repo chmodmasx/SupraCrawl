@@ -1,0 +1,323 @@
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import re
+from typing import Any
+
+import httpx
+
+from .chunking import Chunk
+from .config import Settings
+from .extractor import Extraction
+from .fetcher import FetchResult
+from .urls import normalize_url
+
+
+class SearchBackendError(RuntimeError):
+    pass
+
+
+def document_id(url: str) -> str:
+    normalized = normalize_url(url)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _compact_text(text: str, max_chars: int = 600) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 2].rstrip() + " …"
+
+
+class OpenSearchStore:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self._indices_ready = False
+        self._indices_lock = asyncio.Lock()
+
+    async def close(self) -> None:
+        return None
+
+    def _auth(self) -> tuple[str, str] | None:
+        if self.settings.opensearch_username and self.settings.opensearch_password:
+            return (self.settings.opensearch_username, self.settings.opensearch_password)
+        return None
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        base_url = self.settings.opensearch_url
+        if not base_url:
+            raise SearchBackendError("OpenSearch is not configured")
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.settings.opensearch_timeout_s,
+                verify=self.settings.opensearch_verify_tls,
+                auth=self._auth(),
+            ) as client:
+                return await client.request(method, base_url.rstrip("/") + path, **kwargs)
+        except httpx.HTTPError as exc:
+            self._indices_ready = False
+            raise SearchBackendError(f"OpenSearch request failed: {exc}") from exc
+
+    @staticmethod
+    def _documents_mapping() -> dict[str, Any]:
+        return {
+            "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+            "mappings": {
+                "dynamic": "strict",
+                "properties": {
+                    "document_id": {"type": "keyword"},
+                    "url": {"type": "keyword"},
+                    "canonical_url": {"type": "keyword"},
+                    "title": {"type": "text"},
+                    "content_hash": {"type": "keyword"},
+                    "fetched_at": {"type": "date"},
+                    "content_type": {"type": "keyword"},
+                    "http_status": {"type": "integer"},
+                    "rendered": {"type": "boolean"},
+                    "extractor": {"type": "keyword"},
+                    "extraction_quality": {"type": "float"},
+                    "chunk_count": {"type": "integer"},
+                },
+            },
+        }
+
+    @staticmethod
+    def _chunks_mapping() -> dict[str, Any]:
+        return {
+            "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+            "mappings": {
+                "dynamic": "strict",
+                "properties": {
+                    "document_id": {"type": "keyword"},
+                    "content_hash": {"type": "keyword"},
+                    "url": {"type": "keyword"},
+                    "title": {"type": "text"},
+                    "section_path": {"type": "text"},
+                    "text": {"type": "text"},
+                    "ordinal": {"type": "integer"},
+                    "approx_tokens": {"type": "integer"},
+                    "fetched_at": {"type": "date"},
+                },
+            },
+        }
+
+    async def ensure_indices(self) -> None:
+        if self._indices_ready:
+            return
+
+        async with self._indices_lock:
+            if self._indices_ready:
+                return
+
+            definitions = (
+                (self.settings.opensearch_documents_index, self._documents_mapping()),
+                (self.settings.opensearch_chunks_index, self._chunks_mapping()),
+            )
+            for index_name, mapping in definitions:
+                response = await self._request("HEAD", f"/{index_name}")
+                if response.status_code == 404:
+                    response = await self._request("PUT", f"/{index_name}", json=mapping)
+                    if response.status_code not in {200, 201}:
+                        raise SearchBackendError(
+                            f"Unable to create OpenSearch index {index_name}: "
+                            f"HTTP {response.status_code}"
+                        )
+                elif response.status_code >= 400:
+                    raise SearchBackendError(
+                        f"Unable to inspect OpenSearch index {index_name}: "
+                        f"HTTP {response.status_code}"
+                    )
+
+            self._indices_ready = True
+
+    async def index_document(
+        self,
+        fetched: FetchResult,
+        extraction: Extraction,
+        chunks: list[Chunk],
+        content_hash: str,
+    ) -> tuple[str, int]:
+        await self.ensure_indices()
+
+        canonical_url = normalize_url(extraction.canonical_url or fetched.final_url)
+        doc_id = document_id(canonical_url)
+        document_source = {
+            "document_id": doc_id,
+            "url": fetched.final_url,
+            "canonical_url": canonical_url,
+            "title": extraction.title,
+            "content_hash": content_hash,
+            "fetched_at": fetched.fetched_at,
+            "content_type": fetched.content_type,
+            "http_status": fetched.status_code,
+            "rendered": extraction.rendered,
+            "extractor": extraction.extractor,
+            "extraction_quality": extraction.quality,
+            "chunk_count": len(chunks),
+        }
+
+        lines: list[str] = [
+            json.dumps(
+                {
+                    "index": {
+                        "_index": self.settings.opensearch_documents_index,
+                        "_id": doc_id,
+                    }
+                },
+                separators=(",", ":"),
+            ),
+            json.dumps(document_source, separators=(",", ":"), ensure_ascii=False),
+        ]
+
+        for chunk in chunks:
+            chunk_id = f"{doc_id}:{content_hash[:16]}:{chunk.ordinal}"
+            chunk_source = {
+                "document_id": doc_id,
+                "content_hash": content_hash,
+                "url": fetched.final_url,
+                "title": extraction.title,
+                "section_path": " > ".join(part for part in chunk.section_path if part),
+                "text": chunk.text,
+                "ordinal": chunk.ordinal,
+                "approx_tokens": chunk.approx_tokens,
+                "fetched_at": fetched.fetched_at,
+            }
+            lines.extend(
+                [
+                    json.dumps(
+                        {
+                            "index": {
+                                "_index": self.settings.opensearch_chunks_index,
+                                "_id": chunk_id,
+                            }
+                        },
+                        separators=(",", ":"),
+                    ),
+                    json.dumps(chunk_source, separators=(",", ":"), ensure_ascii=False),
+                ]
+            )
+
+        bulk_payload = "\n".join(lines) + "\n"
+        response = await self._request(
+            "POST",
+            "/_bulk?refresh=wait_for",
+            content=bulk_payload.encode("utf-8"),
+            headers={"Content-Type": "application/x-ndjson"},
+        )
+        if response.status_code >= 400:
+            raise SearchBackendError(f"OpenSearch bulk index failed: HTTP {response.status_code}")
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise SearchBackendError("OpenSearch bulk index returned invalid JSON") from exc
+        if not isinstance(body, dict) or body.get("errors") is True:
+            raise SearchBackendError("OpenSearch bulk index reported item errors")
+
+        stale_query = {
+            "query": {
+                "bool": {
+                    "filter": [{"term": {"document_id": doc_id}}],
+                    "must_not": [{"term": {"content_hash": content_hash}}],
+                }
+            }
+        }
+        response = await self._request(
+            "POST",
+            f"/{self.settings.opensearch_chunks_index}/_delete_by_query"
+            "?refresh=true&conflicts=proceed",
+            json=stale_query,
+        )
+        if response.status_code >= 400:
+            raise SearchBackendError(
+                f"OpenSearch stale-chunk cleanup failed: HTTP {response.status_code}"
+            )
+
+        return doc_id, len(chunks)
+
+    async def search(self, query: str, limit: int) -> list[dict[str, Any]]:
+        await self.ensure_indices()
+        body = {
+            "size": limit,
+            "track_total_hits": False,
+            "_source": [
+                "document_id",
+                "url",
+                "title",
+                "section_path",
+                "text",
+                "ordinal",
+                "fetched_at",
+            ],
+            "query": {
+                "bool": {
+                    "should": [
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": ["title^4", "section_path^2", "text"],
+                                "type": "best_fields",
+                            }
+                        },
+                        {
+                            "multi_match": {
+                                "query": query,
+                                "fields": ["title^7", "section_path^4", "text^2"],
+                                "type": "phrase",
+                            }
+                        },
+                    ],
+                    "minimum_should_match": 1,
+                }
+            },
+            "collapse": {"field": "document_id"},
+        }
+        response = await self._request(
+            "POST",
+            f"/{self.settings.opensearch_chunks_index}/_search",
+            json=body,
+        )
+        if response.status_code >= 400:
+            raise SearchBackendError(f"OpenSearch search failed: HTTP {response.status_code}")
+
+        try:
+            payload = response.json()
+            hits = payload["hits"]["hits"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SearchBackendError("OpenSearch search returned an invalid response") from exc
+        if not isinstance(hits, list):
+            raise SearchBackendError("OpenSearch search returned invalid hits")
+
+        results: list[dict[str, Any]] = []
+        for position, hit in enumerate(hits, start=1):
+            if not isinstance(hit, dict) or not isinstance(hit.get("_source"), dict):
+                continue
+            source = hit["_source"]
+            url = source.get("url")
+            if not isinstance(url, str) or not url:
+                continue
+            title = source.get("title") if isinstance(source.get("title"), str) else ""
+            text = source.get("text") if isinstance(source.get("text"), str) else ""
+            section_path = (
+                source.get("section_path") if isinstance(source.get("section_path"), str) else ""
+            )
+            score = hit.get("_score")
+            results.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "description": _compact_text(text),
+                    "position": position,
+                    "score": float(score) if isinstance(score, (int, float)) else None,
+                    "metadata": {
+                        "document_id": source.get("document_id"),
+                        "section_path": section_path,
+                        "chunk_ordinal": source.get("ordinal"),
+                        "fetched_at": source.get("fetched_at"),
+                    },
+                }
+            )
+        return results
