@@ -54,7 +54,9 @@ def _validate_fixture(
     minimum_queries: int,
 ) -> dict[str, str]:
     if len(queries) < minimum_queries:
-        raise RuntimeError(f"benchmark has {len(queries)} queries; expected at least {minimum_queries}")
+        raise RuntimeError(
+            f"benchmark has {len(queries)} queries; expected at least {minimum_queries}"
+        )
 
     id_to_url: dict[str, str] = {}
     urls: set[str] = set()
@@ -92,7 +94,9 @@ def _validate_fixture(
             if relevant_id not in id_to_url:
                 raise RuntimeError(f"query {query_id} references unknown document {relevant_id}")
             if not isinstance(grade, int) or grade <= 0:
-                raise RuntimeError(f"query {query_id} has invalid relevance grade for {relevant_id}")
+                raise RuntimeError(
+                    f"query {query_id} has invalid relevance grade for {relevant_id}"
+                )
 
     return id_to_url
 
@@ -100,7 +104,9 @@ def _validate_fixture(
 async def _delete_index(store: OpenSearchStore, index_name: str) -> None:
     response = await store._request("DELETE", f"/{index_name}")
     if response.status_code not in {200, 404}:
-        raise RuntimeError(f"unable to delete benchmark index {index_name}: HTTP {response.status_code}")
+        raise RuntimeError(
+            f"unable to delete benchmark index {index_name}: HTTP {response.status_code}"
+        )
     store._indices_ready = False
 
 
@@ -113,7 +119,10 @@ async def _seed_corpus(store: OpenSearchStore, corpus: list[dict[str, Any]]) -> 
                 raise RuntimeError(f"invalid chunk in {document['id']}")
             raw_path = raw_chunk.get("section_path", [])
             text = raw_chunk.get("text")
-            if not isinstance(raw_path, list) or not all(isinstance(part, str) for part in raw_path):
+            valid_path = isinstance(raw_path, list) and all(
+                isinstance(part, str) for part in raw_path
+            )
+            if not valid_path:
                 raise RuntimeError(f"invalid section_path in {document['id']}")
             if not isinstance(text, str) or not text.strip():
                 raise RuntimeError(f"empty chunk in {document['id']}")
