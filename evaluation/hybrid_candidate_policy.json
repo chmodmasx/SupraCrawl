@@ -1,0 +1,14 @@
+{
+  "benchmark": "phase3b-hybrid-candidate-v1",
+  "model": "intfloat/multilingual-e5-small",
+  "dimension": 384,
+  "rrf_k": 60,
+  "ndcg_at_10_min_delta": 0.02,
+  "max_mrr_at_10_regression": 0.0,
+  "max_recall_at_5_regression": 0.0,
+  "semantic_queries_top5": [
+    "q13-cross-language-rrf",
+    "q14-cross-language-dense"
+  ],
+  "p95_hybrid_latency_ms_max": 500.0
+}
