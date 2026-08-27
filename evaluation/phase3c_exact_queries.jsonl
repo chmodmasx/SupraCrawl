@@ -1,0 +1,14 @@
+{"id":"q17-cve-log4shell","language":"en","query":"CVE-2021-44228","relevance":{"cve-log4shell":3}}
+{"id":"q18-cve-spring4shell","language":"en","query":"CVE-2022-22965","relevance":{"cve-spring4shell":3}}
+{"id":"q19-opensearch-380","language":"en","query":"OpenSearch 3.8.0 vector runtime","relevance":{"opensearch-380-release":3}}
+{"id":"q20-opensearch-370","language":"en","query":"OpenSearch 3.7.0 compatibility","relevance":{"opensearch-370-release":3}}
+{"id":"q21-current-sha","language":"en","query":"37be2292e5c4737247c940b83860a13de4ea7eb4","relevance":{"phase3b-current-sha":3}}
+{"id":"q22-previous-sha","language":"en","query":"7488abd1101054fe65dbe685054fb5343aca852f","relevance":{"phase3a-previous-sha":3}}
+{"id":"q23-search-endpoint","language":"en","query":"POST /v1/search","relevance":{"search-endpoint":3}}
+{"id":"q24-extract-endpoint","language":"en","query":"POST /v1/extract","relevance":{"extract-endpoint":3}}
+{"id":"q25-e5-model-id","language":"en","query":"intfloat/multilingual-e5-small 384","relevance":{"e5-model-id":3}}
+{"id":"q26-bge-model-id","language":"en","query":"BAAI/bge-m3 1024","relevance":{"bge-model-id":3}}
+{"id":"q27-opensearch-timeout-env","language":"en","query":"SUPRACRAWL_OPENSEARCH_TIMEOUT_S","relevance":{"opensearch-timeout-env":3}}
+{"id":"q28-request-timeout-env","language":"en","query":"SUPRACRAWL_REQUEST_TIMEOUT_S","relevance":{"request-timeout-env":3}}
+{"id":"q29-link-local-ipv6","language":"en","query":"fe80::1","relevance":{"link-local-ipv6":3}}
+{"id":"q30-loopback-ipv4","language":"en","query":"127.0.0.1","relevance":{"loopback-ipv4":3}}

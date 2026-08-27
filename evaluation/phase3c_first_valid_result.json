@@ -1,0 +1,97 @@
+{
+  "benchmark": "phase3c-real-vector-v1",
+  "status": "VALID_MEASUREMENT",
+  "measured_at_utc": "2026-08-27T20:02:03Z",
+  "source": {
+    "base_main_sha": "37be2292e5c4737247c940b83860a13de4ea7eb4",
+    "branch_head_sha": "5a854f2a536f02ec1849d4de1fc668d105fa0bb9",
+    "pull_request_merge_ref_sha": "522f95529b3b5869df2ef14bde3f4fd3341bc22e",
+    "workflow_run_id": 33111137420,
+    "workflow_job_id": 98653957241
+  },
+  "model": {
+    "name": "intfloat/multilingual-e5-small",
+    "dimension": 384
+  },
+  "vector_backend": {
+    "engine": "lucene",
+    "method": "flat",
+    "space_type": "cosinesimil"
+  },
+  "rrf_k": 60,
+  "original_control": {
+    "documents": 16,
+    "queries": 16,
+    "bm25": {
+      "mrr_at_10": 0.84375,
+      "recall_at_5": 0.875,
+      "ndcg_at_10": 0.840367
+    },
+    "dense": {
+      "mrr_at_10": 0.96875,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.966649,
+      "p95_latency_ms": 92.748
+    },
+    "hybrid": {
+      "mrr_at_10": 0.927083,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.935399,
+      "p95_latency_ms": 110.726
+    },
+    "physical_vector_storage": {
+      "count": 16,
+      "dimension": 384,
+      "model": "intfloat/multilingual-e5-small"
+    }
+  },
+  "expanded": {
+    "documents": 30,
+    "queries": 30,
+    "bm25": {
+      "mrr_at_10": 0.916667,
+      "recall_at_5": 0.933333,
+      "ndcg_at_10": 0.912075,
+      "exact_identifier_top1_rate": 1.0,
+      "p95_latency_ms": 58.483
+    },
+    "dense": {
+      "mrr_at_10": 0.941667,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.950933,
+      "exact_identifier_top1_rate": 0.857143,
+      "failed_exact_top1_queries": [
+        "q21-current-sha",
+        "q22-previous-sha"
+      ],
+      "p95_latency_ms": 49.114,
+      "eligible": false
+    },
+    "hybrid": {
+      "mrr_at_10": 0.961111,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.965792,
+      "exact_identifier_top1_rate": 1.0,
+      "p95_latency_ms": 65.656,
+      "eligible": true
+    },
+    "physical_vector_storage": {
+      "count": 30,
+      "dimension": 384,
+      "model": "intfloat/multilingual-e5-small"
+    },
+    "selected_candidate": "hybrid"
+  },
+  "degradation": {
+    "bm25_after_vector_index_loss": "PASS"
+  },
+  "production_default": "bm25",
+  "production_default_changed": false,
+  "notes": [
+    "This file records the first valid Phase 3C measurement before post-measurement lint or hardening changes.",
+    "The frozen Phase 3C policy and exact-identifier fixtures were committed before this measurement.",
+    "Dense failed only the pre-registered exact-identifier top-1 gate; the two failures were the full Git SHA queries.",
+    "Hybrid passed every pre-registered candidate gate and was selected by the frozen policy.",
+    "Workflow-level Phase 3C was not green on this SHA because the separate deterministic job had three Ruff line-length errors; the real-vector job itself completed successfully with 80 tests, OpenSearch execution, degradation check, and clean teardown."
+  ]
+}

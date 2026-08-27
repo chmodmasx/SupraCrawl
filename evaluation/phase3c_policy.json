@@ -1,0 +1,73 @@
+{
+  "benchmark": "phase3c-real-vector-v1",
+  "base_main_sha": "37be2292e5c4737247c940b83860a13de4ea7eb4",
+  "model": "intfloat/multilingual-e5-small",
+  "dimension": 384,
+  "query_prefix": "query: ",
+  "passage_prefix": "passage: ",
+  "vector_index": {
+    "engine": "lucene",
+    "method": "flat",
+    "space_type": "cosinesimil"
+  },
+  "rrf_k": 60,
+  "phase3_bm25_control": {
+    "mrr_at_10": 0.84375,
+    "recall_at_5": 0.875,
+    "ndcg_at_10": 0.840367,
+    "absolute_tolerance": 0.000001
+  },
+  "phase3b_real_dense_control": {
+    "mrr_at_10_min": 0.94875,
+    "recall_at_5_min": 1.0,
+    "ndcg_at_10_min": 0.946649,
+    "semantic_queries_top5": [
+      "q13-cross-language-rrf",
+      "q14-cross-language-dense"
+    ]
+  },
+  "expanded_candidate_gate": {
+    "ndcg_at_10_min_delta_vs_bm25": 0.02,
+    "max_mrr_at_10_regression_vs_bm25": 0.0,
+    "max_recall_at_5_regression_vs_bm25": 0.0,
+    "exact_identifier_top1_rate_min": 1.0,
+    "semantic_queries_top5": [
+      "q13-cross-language-rrf",
+      "q14-cross-language-dense"
+    ],
+    "p95_latency_ms_max": 500.0
+  },
+  "exact_identifier_queries": [
+    "q17-cve-log4shell",
+    "q18-cve-spring4shell",
+    "q19-opensearch-380",
+    "q20-opensearch-370",
+    "q21-current-sha",
+    "q22-previous-sha",
+    "q23-search-endpoint",
+    "q24-extract-endpoint",
+    "q25-e5-model-id",
+    "q26-bge-model-id",
+    "q27-opensearch-timeout-env",
+    "q28-request-timeout-env",
+    "q29-link-local-ipv6",
+    "q30-loopback-ipv4"
+  ],
+  "selection": {
+    "eligible_candidates": ["dense", "hybrid"],
+    "primary_metric": "ndcg_at_10",
+    "tie_absolute_delta": 0.005,
+    "tie_breaker": "lower_p95_latency_ms",
+    "production_default_changes_in_this_phase": false
+  },
+  "hard_requirements": [
+    "vectors_are_stored_and_queried_in_opensearch",
+    "vector_mapping_matches_model_dimension_and_space",
+    "model_or_dimension_mismatch_fails_closed_for_vector_path",
+    "bm25_remains_available_when_vector_path_is_unavailable",
+    "bm25_remains_the_default_v1_search_behavior",
+    "no_external_embedding_api_or_api_key",
+    "clean_compose_teardown",
+    "no_known_blocker_or_high_severity_defect"
+  ]
+}
