@@ -101,6 +101,7 @@ async def test_search_uses_bm25_fields_and_collapses_by_document(monkeypatch) ->
     store = OpenSearchStore(settings)
     store._indices_ready = True
     captured: dict = {}
+    expected_text = "BM25 returns the most relevant passage for the indexed page."
 
     async def fake_request(method: str, path: str, **kwargs):
         captured.update({"method": method, "path": path, "body": kwargs["json"]})
@@ -116,7 +117,7 @@ async def test_search_uses_bm25_fields_and_collapses_by_document(monkeypatch) ->
                                 "url": "https://example.com/article",
                                 "title": "SupraCrawl article",
                                 "section_path": "Architecture > Search",
-                                "text": "BM25 returns the most relevant passage for the indexed page.",
+                                "text": expected_text,
                                 "ordinal": 2,
                                 "fetched_at": "2026-08-27T12:00:00+00:00",
                             },
@@ -139,7 +140,7 @@ async def test_search_uses_bm25_fields_and_collapses_by_document(monkeypatch) ->
         {
             "title": "SupraCrawl article",
             "url": "https://example.com/article",
-            "description": "BM25 returns the most relevant passage for the indexed page.",
+            "description": expected_text,
             "position": 1,
             "score": 4.25,
             "metadata": {
