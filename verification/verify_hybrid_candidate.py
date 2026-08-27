@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import time
 from pathlib import Path
 from statistics import mean
@@ -14,6 +13,7 @@ from fastembed.common.model_description import ModelSource, PoolingType
 
 from supracrawl.config import Settings
 from supracrawl.evaluation import RetrievalMetrics, evaluate_ranking, macro_average
+from supracrawl.fusion import reciprocal_rank_fusion
 from supracrawl.search import OpenSearchStore
 from verify_retrieval_baseline import (
     _delete_index,
@@ -113,7 +113,6 @@ def _dense_ranking(
     passage_document_ids: list[str],
     limit: int = 10,
 ) -> list[str]:
-    start = time.perf_counter()
     scores = passage_vectors @ query_vector
     order = np.argsort(-scores, kind="stable")
     ranked: list[str] = []
@@ -128,21 +127,7 @@ def _dense_ranking(
             break
     if not ranked:
         raise RuntimeError("dense retrieval produced no document ranking")
-    _ = start
     return ranked
-
-
-def _rrf(rankings: list[list[str]], k: int, limit: int = 10) -> list[str]:
-    if k <= 0:
-        raise ValueError("RRF k must be positive")
-    scores: dict[str, float] = {}
-    best_rank: dict[str, int] = {}
-    for ranking in rankings:
-        for rank, document_id in enumerate(ranking, start=1):
-            scores[document_id] = scores.get(document_id, 0.0) + 1.0 / (k + rank)
-            best_rank[document_id] = min(best_rank.get(document_id, rank), rank)
-    ordered = sorted(scores, key=lambda doc_id: (-scores[doc_id], best_rank[doc_id], doc_id))
-    return ordered[:limit]
 
 
 async def _timed_bm25(
@@ -171,6 +156,15 @@ def _top_grade_relevant(query: dict[str, Any]) -> str:
     return min(relevance, key=lambda document_id: (-relevance[document_id], document_id))
 
 
+def _semantic_query_ids(policy: dict[str, Any]) -> list[str]:
+    query_ids = policy.get("semantic_queries_top5")
+    if not isinstance(query_ids, list) or not query_ids:
+        raise RuntimeError("promotion policy requires semantic_queries_top5")
+    if not all(isinstance(query_id, str) and query_id for query_id in query_ids):
+        raise RuntimeError("semantic_queries_top5 must contain non-empty query ids")
+    return query_ids
+
+
 async def _run() -> None:
     corpus = _load_jsonl(CORPUS_PATH)
     queries = _load_jsonl(QUERIES_PATH)
@@ -183,6 +177,7 @@ async def _run() -> None:
     model_name = str(policy["model"])
     dimension = int(policy["dimension"])
     rrf_k = int(policy["rrf_k"])
+    semantic_query_ids = _semantic_query_ids(policy)
     _register_model(model_name, dimension)
 
     model_start = time.perf_counter()
@@ -234,7 +229,11 @@ async def _run() -> None:
                 passage_document_ids,
                 limit=10,
             )
-            hybrid_ranking = _rrf([bm25_ranking, dense_ranking], k=rrf_k, limit=10)
+            hybrid_ranking = reciprocal_rank_fusion(
+                [bm25_ranking, dense_ranking],
+                k=rrf_k,
+                limit=10,
+            )
             hybrid_latency_ms = (time.perf_counter() - hybrid_start) * 1000.0
 
             bm25_metric = evaluate_ranking(bm25_ranking, query["relevance"])
@@ -310,7 +309,7 @@ async def _run() -> None:
         }
         query_by_id = {query["id"]: query for query in queries}
         detail_by_id = {detail["id"]: detail for detail in query_report}
-        for query_id in policy["semantic_queries_top5"]:
+        for query_id in semantic_query_ids:
             query = query_by_id.get(query_id)
             detail = detail_by_id.get(query_id)
             if query is None or detail is None:
