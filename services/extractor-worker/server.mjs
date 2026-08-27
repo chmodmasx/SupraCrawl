@@ -17,6 +17,22 @@ app.use(express.json({ limit: "7mb" }));
 
 let browserPromise = null;
 
+function parseHttpUrl(input) {
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (!new Set(["http:", "https:"]).has(url.protocol)) {
+    throw new Error("Only HTTP(S) URLs are allowed");
+  }
+  if (url.username || url.password) {
+    throw new Error("URL credentials are not allowed");
+  }
+  return url;
+}
+
 function normalizeAddress(address) {
   let parsed = ipaddr.parse(address);
   if (parsed.kind() === "ipv6" && parsed.isIPv4MappedAddress()) {
@@ -40,21 +56,14 @@ function isForbiddenAddress(address) {
 }
 
 async function validatePublicUrl(input) {
-  let url;
-  try {
-    url = new URL(input);
-  } catch {
-    throw new Error("Invalid URL");
-  }
-  if (!new Set(["http:", "https:"]).has(url.protocol)) {
-    throw new Error("Only HTTP(S) URLs are allowed");
-  }
-  if (url.username || url.password) {
-    throw new Error("URL credentials are not allowed");
-  }
-
+  const url = parseHttpUrl(input);
   const host = url.hostname.replace(/\.$/, "").toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "metadata.google.internal") {
+  if (
+    host === "localhost"
+    || host.endsWith(".localhost")
+    || host.endsWith(".local")
+    || host === "metadata.google.internal"
+  ) {
     throw new Error("Local hostnames are not allowed");
   }
 
@@ -110,7 +119,12 @@ function extractReadable(html, url) {
 
 async function getBrowser() {
   if (!browserEnabled) throw new Error("Browser rendering is disabled");
-  browserPromise ??= chromium.launch({ headless: true });
+  if (!browserPromise) {
+    browserPromise = chromium.launch({ headless: true }).catch((error) => {
+      browserPromise = null;
+      throw error;
+    });
+  }
   return browserPromise;
 }
 
@@ -126,7 +140,11 @@ async function renderHtml(inputUrl) {
   try {
     await context.route("**/*", async (route) => {
       const requestUrl = route.request().url();
-      if (requestUrl.startsWith("data:") || requestUrl.startsWith("blob:") || requestUrl.startsWith("about:")) {
+      if (
+        requestUrl.startsWith("data:")
+        || requestUrl.startsWith("blob:")
+        || requestUrl.startsWith("about:")
+      ) {
         return route.continue();
       }
       try {
@@ -153,7 +171,9 @@ app.get("/health", (_req, res) => {
 
 app.post("/extract", async (req, res) => {
   try {
-    const url = await validatePublicUrl(req.body?.url);
+    // Static extraction never makes a network request. Validate URL syntax and
+    // scheme, but do not perform redundant DNS resolution in this code path.
+    const url = parseHttpUrl(req.body?.url);
     const result = extractReadable(req.body?.html, url.toString());
     res.json(result);
   } catch (error) {

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs"
+    "check": "node --check server.mjs && node --check smoke-test.mjs",
+    "smoke": "node smoke-test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
