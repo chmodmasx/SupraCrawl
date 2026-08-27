@@ -2,10 +2,18 @@
   "schema_version": 1,
   "benchmark": "supracrawl-bm25-v1",
   "minimum_queries": 14,
-  "mrr_at_10_min": 0.75,
-  "recall_at_5_min": 0.75,
-  "ndcg_at_10_min": 0.75,
-  "p95_latency_ms_max": 2500.0,
-  "mean_description_tokens_top5_max": 1100.0,
-  "note": "Initial bootstrap floors. Tighten to the measured reference baseline before Phase 3A certification; do not loosen later without a documented relevance investigation."
+  "reference": {
+    "mrr_at_10": 0.821429,
+    "recall_at_5": 0.857143,
+    "ndcg_at_10": 0.830781,
+    "p95_latency_ms": 64.897,
+    "mean_description_tokens_top5": 220.857,
+    "source_head_sha": "56b7cff67619ca5f1ce0d2161f4d774cc539a1c0"
+  },
+  "mrr_at_10_min": 0.82,
+  "recall_at_5_min": 0.85,
+  "ndcg_at_10_min": 0.83,
+  "p95_latency_ms_max": 500.0,
+  "mean_description_tokens_top5_max": 250.0,
+  "note": "Reference measured on the pinned OpenSearch 3.8.0 live benchmark. Relevance floors allow only rounding-level drift; latency keeps infrastructure headroom. Do not loosen without a documented relevance or performance investigation."
 }
