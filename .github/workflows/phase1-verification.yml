@@ -1,6 +1,8 @@
 name: Phase 1 Verification
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

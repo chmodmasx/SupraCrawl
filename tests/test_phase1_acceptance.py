@@ -189,7 +189,9 @@ async def test_robots_obeys_disallow_and_allow(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status, expected", [(404, True), (500, False)])
-async def test_robots_4xx_allows_and_5xx_fails_closed(monkeypatch, status: int, expected: bool) -> None:
+async def test_robots_4xx_allows_and_5xx_fails_closed(
+    monkeypatch, status: int, expected: bool
+) -> None:
     transport = httpx.MockTransport(lambda _request: httpx.Response(status))
     monkeypatch.setattr(robots_module, "validate_public_url", _allow_test_url)
     _install_mock_transport(monkeypatch, robots_module, transport)

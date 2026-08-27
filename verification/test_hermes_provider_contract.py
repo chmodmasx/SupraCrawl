@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 
 import pytest
-
 from agent.web_search_provider import WebSearchProvider
+
 import integrations.hermes.supracrawl.provider as provider_module
 from integrations.hermes.supracrawl.provider import SupraCrawlWebSearchProvider
 
