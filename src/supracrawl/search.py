@@ -4,7 +4,9 @@ import asyncio
 import hashlib
 import json
 import re
-from typing import Any
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, AsyncIterator
 from urllib.parse import urlsplit
 
 import httpx
@@ -18,6 +20,12 @@ from .urls import normalize_url
 
 class SearchBackendError(RuntimeError):
     pass
+
+
+@dataclass(slots=True)
+class _DocumentLockState:
+    lock: asyncio.Lock
+    users: int = 0
 
 
 def document_id(url: str) -> str:
@@ -59,6 +67,8 @@ class OpenSearchStore:
         self.settings = settings
         self._indices_ready = False
         self._indices_lock = asyncio.Lock()
+        self._document_locks_guard = asyncio.Lock()
+        self._document_locks: dict[str, _DocumentLockState] = {}
 
     async def close(self) -> None:
         return None
@@ -67,6 +77,24 @@ class OpenSearchStore:
         if self.settings.opensearch_username and self.settings.opensearch_password:
             return (self.settings.opensearch_username, self.settings.opensearch_password)
         return None
+
+    @asynccontextmanager
+    async def _document_lock(self, doc_id: str) -> AsyncIterator[None]:
+        async with self._document_locks_guard:
+            state = self._document_locks.get(doc_id)
+            if state is None:
+                state = _DocumentLockState(lock=asyncio.Lock())
+                self._document_locks[doc_id] = state
+            state.users += 1
+
+        try:
+            async with state.lock:
+                yield
+        finally:
+            async with self._document_locks_guard:
+                state.users -= 1
+                if state.users == 0 and not state.lock.locked():
+                    self._document_locks.pop(doc_id, None)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         base_url = self.settings.opensearch_url
@@ -180,13 +208,38 @@ class OpenSearchStore:
         chunks: list[Chunk],
         content_hash: str,
     ) -> tuple[str, int]:
+        canonical_url = normalize_url(extraction.canonical_url or fetched.final_url)
+        identity_url = canonical_identity_url(fetched.final_url, canonical_url)
+        doc_id = document_id(identity_url)
+
+        # Bulk replacement plus stale-chunk cleanup is one logical operation.
+        # Serialize it per document so concurrent refreshes cannot delete each
+        # other's newly written chunks. Different documents still index concurrently.
+        async with self._document_lock(doc_id):
+            return await self._index_document_locked(
+                fetched=fetched,
+                extraction=extraction,
+                chunks=chunks,
+                content_hash=content_hash,
+                canonical_url=canonical_url,
+                identity_url=identity_url,
+                doc_id=doc_id,
+            )
+
+    async def _index_document_locked(
+        self,
+        fetched: FetchResult,
+        extraction: Extraction,
+        chunks: list[Chunk],
+        content_hash: str,
+        canonical_url: str,
+        identity_url: str,
+        doc_id: str,
+    ) -> tuple[str, int]:
         # Validate on writes: OpenSearch's bulk API can otherwise auto-create a
         # deleted index with dynamic mappings before a 404 can be observed.
         await self.ensure_indices(validate=True)
 
-        canonical_url = normalize_url(extraction.canonical_url or fetched.final_url)
-        identity_url = canonical_identity_url(fetched.final_url, canonical_url)
-        doc_id = document_id(identity_url)
         document_source = {
             "document_id": doc_id,
             "url": fetched.final_url,
