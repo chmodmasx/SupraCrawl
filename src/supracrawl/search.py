@@ -269,14 +269,18 @@ class OpenSearchStore:
             raise SearchBackendError("OpenSearch vector mapping returned invalid JSON")
         index_payload = payload.get(index_name)
         if not isinstance(index_payload, dict):
-            raise SearchBackendError("OpenSearch vector mapping is missing the configured index")
+            raise SearchBackendError(
+                "OpenSearch vector mapping is missing the configured index"
+            )
         mappings = index_payload.get("mappings")
         if not isinstance(mappings, dict):
             raise SearchBackendError("OpenSearch vector mapping is missing mappings")
         meta = mappings.get("_meta")
         properties = mappings.get("properties")
         if not isinstance(meta, dict) or not isinstance(properties, dict):
-            raise SearchBackendError("OpenSearch vector mapping is missing provenance metadata")
+            raise SearchBackendError(
+                "OpenSearch vector mapping is missing provenance metadata"
+            )
 
         expected_meta = {
             "embedding_model": self.settings.dense_model_name,
@@ -576,6 +580,11 @@ class OpenSearchStore:
                     ) from exc
                 if not isinstance(body, dict) or body.get("errors") is True:
                     raise SearchBackendError("OpenSearch vector bulk index reported item errors")
+
+                # The bulk API can auto-create an index if it disappears after the
+                # pre-write validation. Revalidate after the write so a race cannot
+                # silently leave dynamic or incompatible vector mappings behind.
+                await self.ensure_vector_index(validate=True)
 
             stale_query = {
                 "query": {
