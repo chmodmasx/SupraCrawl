@@ -58,7 +58,9 @@ def chunk_markdown(markdown: str, target_tokens: int = 500) -> list[Chunk]:
             size += len(line)
             continue
 
-        if size and size + len(line) + 1 > target_chars and not line.lstrip().startswith(("- ", "* ", "|")):
+        exceeds_target = size and size + len(line) + 1 > target_chars
+        is_structured_line = line.lstrip().startswith(("- ", "* ", "|"))
+        if exceeds_target and not is_structured_line:
             flush()
         buffer.append(line)
         size += len(line) + 1

@@ -8,7 +8,13 @@ from .chunking import approx_tokens, chunk_markdown, select_chunks
 from .config import get_settings
 from .extractor import Extractor, content_hash
 from .fetcher import FetchError, HttpFetcher
-from .models import ExtractMetadata, ExtractRequest, ExtractResponse, ExtractedDocument, HealthResponse
+from .models import (
+    ExtractedDocument,
+    ExtractMetadata,
+    ExtractRequest,
+    ExtractResponse,
+    HealthResponse,
+)
 from .security import UnsafeUrlError
 
 settings = get_settings()

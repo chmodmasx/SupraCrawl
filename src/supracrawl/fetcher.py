@@ -63,9 +63,15 @@ class HttpFetcher:
                         if response.status_code >= 400:
                             raise FetchError(f"HTTP {response.status_code}")
 
-                        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                        content_type = (
+                            response.headers.get("content-type", "")
+                            .split(";", 1)[0]
+                            .strip()
+                            .lower()
+                        )
                         if content_type not in {"text/html", "application/xhtml+xml"}:
-                            raise FetchError(f"Unsupported content type: {content_type or 'unknown'}")
+                            detail = content_type or "unknown"
+                            raise FetchError(f"Unsupported content type: {detail}")
 
                         declared = response.headers.get("content-length")
                         if declared:

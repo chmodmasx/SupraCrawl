@@ -48,7 +48,11 @@ class Extractor:
                 rendered.title = rendered.title or extraction.title
                 rendered.canonical_url = extraction.canonical_url
                 rendered.quality = self._quality(rendered.markdown, rendered.markdown)
-                if rendered.quality > extraction.quality or len(rendered.markdown) > len(extraction.markdown):
+                rendered_is_better = (
+                    rendered.quality > extraction.quality
+                    or len(rendered.markdown) > len(extraction.markdown)
+                )
+                if rendered_is_better:
                     extraction = rendered
 
         return fetched, extraction
@@ -57,7 +61,8 @@ class Extractor:
         endpoint = "/render-extract" if render else "/extract"
         payload = {"url": url} if render else {"url": url, "html": html}
         try:
-            async with httpx.AsyncClient(timeout=self.settings.extractor_worker_timeout_s) as client:
+            timeout = self.settings.extractor_worker_timeout_s
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     self.settings.extractor_worker_url.rstrip("/") + endpoint,
                     json=payload,

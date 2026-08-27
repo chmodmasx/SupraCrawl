@@ -4,7 +4,6 @@ import os
 from typing import Any
 
 import httpx
-
 from agent.web_search_provider import WebSearchProvider
 
 
