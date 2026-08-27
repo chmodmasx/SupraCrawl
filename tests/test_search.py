@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import httpx
@@ -114,6 +115,80 @@ async def test_index_document_writes_document_and_chunks_then_removes_stale_chun
     assert cleanup_path.startswith(f"/{settings.opensearch_chunks_index}/_delete_by_query")
     must_not = cleanup_kwargs["json"]["query"]["bool"]["must_not"]
     assert must_not == [{"term": {"content_hash": "a" * 64}}]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reindexes_of_same_document_are_serialized(monkeypatch) -> None:
+    settings = Settings(opensearch_url="http://opensearch:9200")
+    store = OpenSearchStore(settings)
+    store._indices_ready = True
+    first_bulk_started = asyncio.Event()
+    release_first_bulk = asyncio.Event()
+    operations: list[str] = []
+    bulk_count = 0
+
+    async def fake_request(method: str, path: str, **kwargs):
+        nonlocal bulk_count
+        if method == "HEAD":
+            return httpx.Response(200)
+        if path.startswith("/_bulk"):
+            bulk_count += 1
+            lines = kwargs["content"].decode("utf-8").strip().splitlines()
+            digest = json.loads(lines[1])["content_hash"]
+            operations.append(f"bulk:{digest[0]}")
+            if bulk_count == 1:
+                first_bulk_started.set()
+                await release_first_bulk.wait()
+            return httpx.Response(200, json={"errors": False, "items": []})
+        if "_delete_by_query" in path:
+            digest = kwargs["json"]["query"]["bool"]["must_not"][0]["term"]["content_hash"]
+            operations.append(f"cleanup:{digest[0]}")
+            return httpx.Response(200, json={"deleted": 1})
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    monkeypatch.setattr(store, "_request", fake_request)
+
+    fetched = FetchResult(
+        fetch_url="https://example.com/article",
+        final_url="https://example.com/article",
+        status_code=200,
+        content_type="text/html",
+        html="<html></html>",
+        fetched_at="2026-08-27T12:00:00+00:00",
+    )
+    extraction = Extraction(
+        title="Article",
+        markdown="# Heading\n\nUseful text",
+        canonical_url="https://example.com/article",
+        extractor="readability",
+        quality=0.9,
+        rendered=False,
+    )
+    chunks = [
+        Chunk(
+            ordinal=0,
+            section_path=("Heading",),
+            text="# Heading\n\nUseful text",
+            approx_tokens=8,
+        )
+    ]
+
+    first = asyncio.create_task(
+        store.index_document(fetched, extraction, chunks, content_hash="a" * 64)
+    )
+    await first_bulk_started.wait()
+    second = asyncio.create_task(
+        store.index_document(fetched, extraction, chunks, content_hash="b" * 64)
+    )
+
+    await asyncio.sleep(0.05)
+    assert operations == ["bulk:a"]
+
+    release_first_bulk.set()
+    await asyncio.gather(first, second)
+
+    assert operations == ["bulk:a", "cleanup:a", "bulk:b", "cleanup:b"]
+    assert store._document_locks == {}
 
 
 @pytest.mark.asyncio
