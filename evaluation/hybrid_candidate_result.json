@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "benchmark": "phase3b-hybrid-candidate-v1",
+  "candidate": {
+    "model": "intfloat/multilingual-e5-small",
+    "dimension": 384,
+    "runtime": "fastembed-0.8.0",
+    "rrf_k": 60
+  },
+  "source": {
+    "head_sha": "e63d3efbc39ecd958812d8f9569bece657c047f1",
+    "pull_request_merge_ref_sha": "930714eb2e3d5d5e8cd45a23e27056149f936354",
+    "workflow_run_id": 33102415862,
+    "workflow_job_id": 98623317513,
+    "opensearch": "3.8.0"
+  },
+  "aggregate": {
+    "bm25": {
+      "mrr_at_10": 0.84375,
+      "recall_at_5": 0.875,
+      "ndcg_at_10": 0.840367
+    },
+    "dense": {
+      "mrr_at_10": 0.96875,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.966649
+    },
+    "hybrid": {
+      "mrr_at_10": 0.927083,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.935399
+    },
+    "hybrid_ndcg_delta_vs_bm25": 0.095031
+  },
+  "latency_ms": {
+    "bm25_p95": 70.95,
+    "query_embedding_p95": 16.883,
+    "hybrid_p50": 36.081,
+    "hybrid_p95": 71.2,
+    "hybrid_mean": 38.76,
+    "model_load": 5638.059,
+    "passage_embedding": 320.473
+  },
+  "semantic_queries": {
+    "q13-cross-language-rrf": {
+      "dense_top5": [
+        "spanish-bm25",
+        "rrf-hybrid",
+        "spanish-extraction",
+        "result-collapse",
+        "opensearch-bm25"
+      ],
+      "hybrid_top5": [
+        "spanish-bm25",
+        "spanish-extraction",
+        "rrf-hybrid",
+        "result-collapse",
+        "opensearch-bm25"
+      ]
+    },
+    "q14-cross-language-dense": {
+      "dense_top5": [
+        "dense-embeddings",
+        "spanish-bm25",
+        "spanish-extraction",
+        "rrf-hybrid",
+        "opensearch-bm25"
+      ],
+      "hybrid_top5": [
+        "spanish-bm25",
+        "dense-embeddings",
+        "spanish-extraction",
+        "rrf-hybrid",
+        "opensearch-bm25"
+      ]
+    }
+  },
+  "promotion": {
+    "passed": true,
+    "checks": {
+      "mrr_no_regression": true,
+      "recall_no_regression": true,
+      "ndcg_material_improvement": true,
+      "p95_latency_guardrail": true,
+      "semantic_top5:q13-cross-language-rrf": true,
+      "semantic_top5:q14-cross-language-dense": true
+    }
+  },
+  "interpretation": "The candidate passes the pre-registered screening policy. This authorizes a separate production-integration evaluation; it does not certify RRF or dense retrieval for production. Dense-only quality exceeded equal-weight RRF on this small benchmark, so production architecture must compare both under a realistic vector-store path and additional robustness tests."
+}

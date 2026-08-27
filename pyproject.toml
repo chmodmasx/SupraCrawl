@@ -25,6 +25,10 @@ dev = [
   "pytest-asyncio>=0.24",
   "ruff>=0.9",
 ]
+hybrid-eval = [
+  "fastembed>=0.6,<1",
+  "numpy>=1.26,<3",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/supracrawl"]

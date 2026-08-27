@@ -8,8 +8,8 @@
     "ndcg_at_10": 0.840367,
     "p95_latency_ms": 59.465,
     "mean_description_tokens_top5": 237.25,
-    "source_head_sha": "e50dbbcb1b827cfaa46b1a5c44b1fffd8d35fa94",
-    "source_pr_merge_sha": "b4f140a9288ef804407e72bb55157cf01f564f5f"
+    "source_head_sha": "08ab8df4ed51c20c42f03351bf7f578a82c710dc",
+    "source_pr_merge_sha": "7488abd1101054fe65dbe685054fb5343aca852f"
   },
   "mrr_at_10_min": 0.84,
   "recall_at_5_min": 0.87,
