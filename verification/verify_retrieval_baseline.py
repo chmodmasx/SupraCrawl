@@ -79,6 +79,7 @@ def _validate_fixture(
         urls.add(url)
 
     query_ids: set[str] = set()
+    has_graded_multi_relevance = False
     for query in queries:
         query_id = query.get("id")
         text = query.get("query")
@@ -90,6 +91,8 @@ def _validate_fixture(
             raise RuntimeError(f"query {query_id} has no text")
         if not isinstance(relevance, dict) or not relevance:
             raise RuntimeError(f"query {query_id} has no relevance judgments")
+
+        positive_grades: set[int] = set()
         for relevant_id, grade in relevance.items():
             if relevant_id not in id_to_url:
                 raise RuntimeError(f"query {query_id} references unknown document {relevant_id}")
@@ -97,6 +100,15 @@ def _validate_fixture(
                 raise RuntimeError(
                     f"query {query_id} has invalid relevance grade for {relevant_id}"
                 )
+            positive_grades.add(grade)
+
+        if len(relevance) > 1 and len(positive_grades) > 1:
+            has_graded_multi_relevance = True
+
+    if not has_graded_multi_relevance:
+        raise RuntimeError(
+            "benchmark requires at least one multi-relevant query with distinct positive grades"
+        )
 
     return id_to_url
 
