@@ -9,7 +9,12 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from verify_retrieval_baseline import _delete_index, _load_jsonl, _percentile, _validate_fixture
+from verify_retrieval_baseline import (
+    _delete_index,
+    _load_jsonl,
+    _percentile,
+    _validate_fixture,
+)
 
 from supracrawl.chunking import Chunk, approx_tokens
 from supracrawl.config import Settings
@@ -18,7 +23,7 @@ from supracrawl.evaluation import RetrievalMetrics, evaluate_ranking, macro_aver
 from supracrawl.extractor import Extraction
 from supracrawl.fetcher import FetchResult
 from supracrawl.fusion import reciprocal_rank_fusion
-from supracrawl.search import OpenSearchStore
+from supracrawl.search import OpenSearchStore, document_id
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_PATH = ROOT / "evaluation" / "corpus.jsonl"
@@ -52,6 +57,8 @@ def _aggregate(metrics: list[RetrievalMetrics]) -> dict[str, float]:
 
 def _prepare_document(
     document: dict[str, Any],
+    *,
+    passage_prefix: str,
 ) -> tuple[FetchResult, Extraction, list[Chunk], str, list[str]]:
     chunks: list[Chunk] = []
     markdown_parts: list[str] = []
@@ -60,7 +67,9 @@ def _prepare_document(
     for ordinal, raw_chunk in enumerate(document["chunks"]):
         raw_path = raw_chunk.get("section_path", [])
         text = raw_chunk.get("text")
-        if not isinstance(raw_path, list) or not all(isinstance(part, str) for part in raw_path):
+        if not isinstance(raw_path, list) or not all(
+            isinstance(part, str) for part in raw_path
+        ):
             raise RuntimeError(f"invalid section_path in {document['id']}")
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError(f"empty chunk in {document['id']}")
@@ -77,6 +86,7 @@ def _prepare_document(
                 title=title,
                 section_path=raw_path,
                 text=text,
+                prefix=passage_prefix,
             )
         )
 
@@ -105,6 +115,7 @@ async def _clear_indices(store: OpenSearchStore, settings: Settings) -> None:
     await _delete_index(store, settings.opensearch_documents_index)
     await _delete_index(store, settings.opensearch_chunks_index)
     await _delete_index(store, settings.opensearch_vector_chunks_index)
+    store._indices_ready = False
     store._vector_index_ready = False
 
 
@@ -116,7 +127,10 @@ async def _seed_corpus_with_vectors(
     prepared: list[tuple[FetchResult, Extraction, list[Chunk], str]] = []
     all_passages: list[str] = []
     for document in corpus:
-        fetched, extraction, chunks, digest, passages = _prepare_document(document)
+        fetched, extraction, chunks, digest, passages = _prepare_document(
+            document,
+            passage_prefix=embedder.passage_prefix,
+        )
         prepared.append((fetched, extraction, chunks, digest))
         all_passages.extend(passages)
 
@@ -156,7 +170,9 @@ async def _verify_physical_vector_storage(
     index_name = store.settings.opensearch_vector_chunks_index
     count_response = await store._request("GET", f"/{index_name}/_count")
     if count_response.status_code >= 400:
-        raise RuntimeError(f"unable to count vector chunks: HTTP {count_response.status_code}")
+        raise RuntimeError(
+            f"unable to count vector chunks: HTTP {count_response.status_code}"
+        )
     count_payload = count_response.json()
     count = count_payload.get("count") if isinstance(count_payload, dict) else None
     if count != expected_chunks:
@@ -172,7 +188,9 @@ async def _verify_physical_vector_storage(
         },
     )
     if sample_response.status_code >= 400:
-        raise RuntimeError(f"unable to inspect stored vector: HTTP {sample_response.status_code}")
+        raise RuntimeError(
+            f"unable to inspect stored vector: HTTP {sample_response.status_code}"
+        )
     try:
         source = sample_response.json()["hits"]["hits"][0]["_source"]
     except (KeyError, IndexError, TypeError, ValueError) as exc:
@@ -356,7 +374,9 @@ def _candidate_checks(
         detail = details.get(query_id)
         if query is None or detail is None:
             raise RuntimeError(f"policy references unknown semantic query {query_id}")
-        checks[f"semantic_top5:{query_id}"] = _top_grade_relevant(query) in detail[ranking_key]
+        checks[f"semantic_top5:{query_id}"] = (
+            _top_grade_relevant(query) in detail[ranking_key]
+        )
     return checks
 
 
@@ -365,7 +385,9 @@ def _select_candidate(
     checks: dict[str, dict[str, bool]],
     policy: dict[str, Any],
 ) -> str:
-    eligible = [ranker for ranker in ("dense", "hybrid") if all(checks[ranker].values())]
+    eligible = [
+        ranker for ranker in ("dense", "hybrid") if all(checks[ranker].values())
+    ]
     if not eligible:
         return "bm25"
     if len(eligible) == 1:
@@ -389,7 +411,9 @@ def _assert_original_controls(report: dict[str, Any], policy: dict[str, Any]) ->
         actual = _metric_value(report, "bm25", metric)
         expected = float(control[metric])
         if abs(actual - expected) > tolerance:
-            failures.append(f"BM25 {metric} {actual:.6f} != {expected:.6f} ± {tolerance}")
+            failures.append(
+                f"BM25 {metric} {actual:.6f} != {expected:.6f} ± {tolerance}"
+            )
 
     dense_control = policy["phase3b_real_dense_control"]
     for metric, key in (
@@ -410,7 +434,95 @@ def _assert_original_controls(report: dict[str, Any], policy: dict[str, Any]) ->
             failures.append(f"real dense semantic query {query_id} missed top 5")
 
     if failures:
-        raise RuntimeError("Phase 3C original-corpus control failed:\n- " + "\n- ".join(failures))
+        raise RuntimeError(
+            "Phase 3C original-corpus control failed:\n- " + "\n- ".join(failures)
+        )
+
+
+async def _assert_stale_vector_replacement(
+    store: OpenSearchStore,
+    embedder: DenseEmbedder,
+) -> None:
+    old_document = {
+        "id": "phase3c-stale-vector-check",
+        "url": "https://benchmark.supracrawl.local/stale-vector-check",
+        "title": "Vector stale replacement check",
+        "chunks": [
+            {
+                "section_path": ["Vector", "Stale replacement"],
+                "text": "obsolete semantic payload alpha that must disappear",
+            }
+        ],
+    }
+    new_document = {
+        **old_document,
+        "chunks": [
+            {
+                "section_path": ["Vector", "Stale replacement"],
+                "text": "replacement semantic payload omega that must remain",
+            }
+        ],
+    }
+
+    old_fetched, old_extraction, old_chunks, old_hash, old_passages = _prepare_document(
+        old_document,
+        passage_prefix=embedder.passage_prefix,
+    )
+    old_vectors = await embedder.embed_passages(old_passages)
+    await store.index_vector_document(
+        fetched=old_fetched,
+        extraction=old_extraction,
+        chunks=old_chunks,
+        content_hash=old_hash,
+        vectors=old_vectors,
+    )
+
+    new_fetched, new_extraction, new_chunks, new_hash, new_passages = _prepare_document(
+        new_document,
+        passage_prefix=embedder.passage_prefix,
+    )
+    if new_hash == old_hash:
+        raise RuntimeError("stale-vector fixture hashes unexpectedly match")
+    new_vectors = await embedder.embed_passages(new_passages)
+    await store.index_vector_document(
+        fetched=new_fetched,
+        extraction=new_extraction,
+        chunks=new_chunks,
+        content_hash=new_hash,
+        vectors=new_vectors,
+    )
+
+    index_name = store.settings.opensearch_vector_chunks_index
+    doc_id = document_id(old_document["url"])
+    response = await store._request(
+        "POST",
+        f"/{index_name}/_search",
+        json={
+            "size": 10,
+            "_source": ["content_hash", "text"],
+            "query": {"term": {"document_id": doc_id}},
+        },
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"stale-vector verification search failed: HTTP {response.status_code}"
+        )
+    try:
+        hits = response.json()["hits"]["hits"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError("stale-vector verification returned invalid JSON") from exc
+    if not isinstance(hits, list) or len(hits) != 1:
+        raise RuntimeError(
+            f"stale-vector replacement left {len(hits) if isinstance(hits, list) else '?'} "
+            "searchable chunks; expected exactly one"
+        )
+    source = hits[0].get("_source") if isinstance(hits[0], dict) else None
+    if not isinstance(source, dict):
+        raise RuntimeError("stale-vector replacement returned an invalid hit")
+    if source.get("content_hash") != new_hash:
+        raise RuntimeError("stale vector content hash remained searchable")
+    if source.get("text") != new_document["chunks"][0]["text"]:
+        raise RuntimeError("stale vector text remained searchable")
 
 
 async def _assert_bm25_survives_vector_loss(
@@ -420,7 +532,10 @@ async def _assert_bm25_survives_vector_loss(
     index_name = store.settings.opensearch_vector_chunks_index
     response = await store._request("DELETE", f"/{index_name}")
     if response.status_code not in {200, 404}:
-        raise RuntimeError(f"unable to remove vector index for degradation test: {response.status_code}")
+        raise RuntimeError(
+            "unable to remove vector index for degradation test: "
+            f"{response.status_code}"
+        )
     store._vector_index_ready = False
     results = await store.search(query, limit=5)
     if not results:
@@ -437,11 +552,18 @@ async def _run() -> None:
     combined_queries = base_queries + exact_queries
 
     base_id_to_url = _validate_fixture(base_corpus, base_queries, minimum_queries=16)
-    combined_id_to_url = _validate_fixture(combined_corpus, combined_queries, minimum_queries=30)
+    combined_id_to_url = _validate_fixture(
+        combined_corpus,
+        combined_queries,
+        minimum_queries=30,
+    )
     if len(policy["exact_identifier_queries"]) != len(exact_queries):
         raise RuntimeError("Phase 3C exact-query policy and fixture size differ")
 
-    base_url = os.environ.get("SUPRACRAWL_OPENSEARCH_URL", "http://127.0.0.1:9200")
+    base_url = os.environ.get(
+        "SUPRACRAWL_OPENSEARCH_URL",
+        "http://127.0.0.1:9200",
+    )
     settings = Settings(
         opensearch_url=base_url,
         opensearch_documents_index="supracrawl-phase3c-documents-v1",
@@ -467,8 +589,15 @@ async def _run() -> None:
 
     try:
         await _clear_indices(store, settings)
-        base_vector_chunks = await _seed_corpus_with_vectors(store, embedder, base_corpus)
-        base_storage = await _verify_physical_vector_storage(store, base_vector_chunks)
+        base_vector_chunks = await _seed_corpus_with_vectors(
+            store,
+            embedder,
+            base_corpus,
+        )
+        base_storage = await _verify_physical_vector_storage(
+            store,
+            base_vector_chunks,
+        )
         base_report = await _run_queries(
             store,
             embedder,
@@ -479,8 +608,15 @@ async def _run() -> None:
         _assert_original_controls(base_report, policy)
 
         await _clear_indices(store, settings)
-        combined_vector_chunks = await _seed_corpus_with_vectors(store, embedder, combined_corpus)
-        combined_storage = await _verify_physical_vector_storage(store, combined_vector_chunks)
+        combined_vector_chunks = await _seed_corpus_with_vectors(
+            store,
+            embedder,
+            combined_corpus,
+        )
+        combined_storage = await _verify_physical_vector_storage(
+            store,
+            combined_vector_chunks,
+        )
         expanded_report = await _run_queries(
             store,
             embedder,
@@ -507,10 +643,16 @@ async def _run() -> None:
         query_by_id = {query["id"]: query for query in combined_queries}
         exact_ids = list(policy["exact_identifier_queries"])
         exact_top1 = {
-            ranker: round(_exact_top1_rate(expanded_report, query_by_id, exact_ids, ranker), 6)
+            ranker: round(
+                _exact_top1_rate(expanded_report, query_by_id, exact_ids, ranker),
+                6,
+            )
             for ranker in ("bm25", "dense", "hybrid")
         }
 
+        # Hardening checks deliberately run after metric collection so they cannot
+        # change the frozen benchmark rankings that select the candidate.
+        await _assert_stale_vector_replacement(store, embedder)
         await _assert_bm25_survives_vector_loss(store, base_queries[0]["query"])
 
         report = {
@@ -546,7 +688,12 @@ async def _run() -> None:
             },
             "production_default": "bm25",
             "production_default_changed": False,
-            "degradation": {"bm25_after_vector_index_loss": "PASS"},
+            "hardening": {
+                "stale_vector_replacement": "PASS",
+            },
+            "degradation": {
+                "bm25_after_vector_index_loss": "PASS",
+            },
         }
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         print(f"Phase 3C measured selection: {selected.upper()}")
