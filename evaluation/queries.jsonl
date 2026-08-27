@@ -12,3 +12,5 @@
 {"id":"q12-observability","language":"en","query":"p50 p95 latency OpenTelemetry Prometheus Grafana search metrics","relevance":{"observability":3}}
 {"id":"q13-cross-language-rrf","language":"es","query":"fusionar resultados de dos buscadores sin entrenar un modelo","relevance":{"rrf-hybrid":3}}
 {"id":"q14-cross-language-dense","language":"es","query":"representaciones numéricas multilingües para similitud semántica","relevance":{"dense-embeddings":3}}
+{"id":"q15-reindex-integrity","language":"en","query":"reindex document stale chunks concurrent refresh document identity","relevance":{"stale-chunk-reindex":3,"asyncio-locks":2,"result-collapse":1}}
+{"id":"q16-search-ranking-integrity","language":"en","query":"OpenSearch search ranking duplicate document chunks collapse BM25","relevance":{"opensearch-bm25":3,"result-collapse":2,"stale-chunk-reindex":1}}
