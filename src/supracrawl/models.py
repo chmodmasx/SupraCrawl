@@ -2,6 +2,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
+SearchMode = Literal["bm25", "hybrid"]
+
 
 class ExtractRequest(BaseModel):
     urls: list[HttpUrl] = Field(min_length=1, max_length=10)
@@ -44,6 +46,7 @@ class ExtractResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     limit: int = Field(default=5, ge=1, le=20)
+    mode: SearchMode | None = None
 
 
 class SearchResult(BaseModel):
@@ -58,6 +61,10 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     success: bool = True
     results: list[SearchResult]
+    mode_requested: SearchMode = "bm25"
+    mode_used: SearchMode = "bm25"
+    degraded: bool = False
+    degradation_reason: str | None = None
 
 
 class IndexRequest(BaseModel):
@@ -70,6 +77,9 @@ class IndexItem(BaseModel):
     document_id: str | None = None
     content_hash: str | None = None
     chunks_indexed: int = Field(default=0, ge=0)
+    vector_indexed: bool | None = None
+    vector_chunks_indexed: int = Field(default=0, ge=0)
+    vector_error: str | None = None
     error: str | None = None
 
 
