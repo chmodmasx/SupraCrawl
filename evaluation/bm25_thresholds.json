@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "benchmark": "supracrawl-bm25-v1",
+  "minimum_queries": 14,
+  "mrr_at_10_min": 0.75,
+  "recall_at_5_min": 0.75,
+  "ndcg_at_10_min": 0.75,
+  "p95_latency_ms_max": 2500.0,
+  "mean_description_tokens_top5_max": 1100.0,
+  "note": "Initial bootstrap floors. Tighten to the measured reference baseline before Phase 3A certification; do not loosen later without a documented relevance investigation."
+}
