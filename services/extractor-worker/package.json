@@ -1,0 +1,19 @@
+{
+  "name": "supracrawl-extractor-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check smoke-test.mjs",
+    "smoke": "node smoke-test.mjs"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "express": "^4.21.0",
+    "ipaddr.js": "^2.2.0",
+    "jsdom": "^26.0.0",
+    "playwright": "^1.52.0",
+    "turndown": "^7.2.0"
+  }
+}
