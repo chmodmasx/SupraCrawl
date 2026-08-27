@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -22,6 +23,28 @@ class SearchBackendError(RuntimeError):
 def document_id(url: str) -> str:
     normalized = normalize_url(url)
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def canonical_identity_url(final_url: str, canonical_url: str | None) -> str:
+    """Use canonical URLs for identity only when they stay on the fetched host.
+
+    A page-controlled cross-origin canonical is useful provenance, but it must not
+    be able to overwrite another site's document identity in the local index.
+    """
+    normalized_final = normalize_url(final_url)
+    if not canonical_url:
+        return normalized_final
+
+    try:
+        normalized_canonical = normalize_url(canonical_url)
+    except ValueError:
+        return normalized_final
+
+    final_host = (urlsplit(normalized_final).hostname or "").lower()
+    canonical_host = (urlsplit(normalized_canonical).hostname or "").lower()
+    if final_host and canonical_host == final_host:
+        return normalized_canonical
+    return normalized_final
 
 
 def _compact_text(text: str, max_chars: int = 600) -> str:
@@ -61,6 +84,22 @@ class OpenSearchStore:
             self._indices_ready = False
             raise SearchBackendError(f"OpenSearch request failed: {exc}") from exc
 
+    async def _request_with_index_recovery(
+        self,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        response = await self._request(method, path, **kwargs)
+        if response.status_code != 404:
+            return response
+
+        # OpenSearch may have restarted with a fresh volume or an operator may
+        # have deleted an index while this process still considered it ready.
+        self._indices_ready = False
+        await self.ensure_indices()
+        return await self._request(method, path, **kwargs)
+
     @staticmethod
     def _documents_mapping() -> dict[str, Any]:
         return {
@@ -71,6 +110,7 @@ class OpenSearchStore:
                     "document_id": {"type": "keyword"},
                     "url": {"type": "keyword"},
                     "canonical_url": {"type": "keyword"},
+                    "identity_url": {"type": "keyword"},
                     "title": {"type": "text"},
                     "content_hash": {"type": "keyword"},
                     "fetched_at": {"type": "date"},
@@ -143,11 +183,13 @@ class OpenSearchStore:
         await self.ensure_indices()
 
         canonical_url = normalize_url(extraction.canonical_url or fetched.final_url)
-        doc_id = document_id(canonical_url)
+        identity_url = canonical_identity_url(fetched.final_url, canonical_url)
+        doc_id = document_id(identity_url)
         document_source = {
             "document_id": doc_id,
             "url": fetched.final_url,
             "canonical_url": canonical_url,
+            "identity_url": identity_url,
             "title": extraction.title,
             "content_hash": content_hash,
             "fetched_at": fetched.fetched_at,
@@ -201,7 +243,7 @@ class OpenSearchStore:
             )
 
         bulk_payload = "\n".join(lines) + "\n"
-        response = await self._request(
+        response = await self._request_with_index_recovery(
             "POST",
             "/_bulk?refresh=wait_for",
             content=bulk_payload.encode("utf-8"),
@@ -275,7 +317,7 @@ class OpenSearchStore:
             },
             "collapse": {"field": "document_id"},
         }
-        response = await self._request(
+        response = await self._request_with_index_recovery(
             "POST",
             f"/{self.settings.opensearch_chunks_index}/_search",
             json=body,
