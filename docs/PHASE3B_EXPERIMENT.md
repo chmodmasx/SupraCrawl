@@ -62,6 +62,45 @@ The policy must not be loosened after seeing a candidate result merely to make t
 pass. A later candidate may be evaluated against the same policy, with its model identity
 versioned explicitly.
 
+## First measured result
+
+The first valid candidate run used head `e63d3efbc39ecd958812d8f9569bece657c047f1`
+and GitHub Actions run `33102415862`. The complete summary is versioned in
+`evaluation/hybrid_candidate_result.json`.
+
+| Retrieval | MRR@10 | Recall@5 | nDCG@10 |
+| --- | ---: | ---: | ---: |
+| BM25 control | 0.843750 | 0.875000 | 0.840367 |
+| Dense E5-small | 0.968750 | 1.000000 | 0.966649 |
+| BM25 + dense RRF | 0.927083 | 1.000000 | 0.935399 |
+
+The hybrid nDCG delta over BM25 was `+0.095031`. Hybrid p95 wall-clock query latency was
+`71.2 ms`; query-embedding p95 was `16.883 ms`. Both deliberate cross-language target
+documents appeared in the hybrid top 5. Every pre-registered promotion check passed.
+
+Dense-only retrieval scored higher than equal-weight RRF on all three aggregate relevance
+metrics. Therefore the result does **not** establish RRF as the best production architecture.
+It establishes that the multilingual semantic signal is strong enough to justify a separate
+production-integration comparison of BM25, dense, and hybrid retrieval.
+
+## Measurement limits
+
+This screening benchmark intentionally isolates retrieval quality, but it is not a production
+scale test:
+
+- the corpus contains 16 documents and 16 passage vectors in this fixture;
+- dense ranking uses normalized in-memory dot products, not an OpenSearch `knn_vector` query;
+- model load (`5638.059 ms`) is startup cost and is excluded from per-query latency;
+- corpus passage embedding (`320.473 ms` for this fixture) is indexing/offline work and is
+  excluded from per-query latency;
+- the benchmark is deliberately small and curated, so it cannot by itself certify exact-match,
+  identifier-heavy, long-tail, or large-index retrieval behavior.
+
+Production integration must therefore validate the real vector-store path and preserve a
+lexical control. The Phase 3B benchmark and policy remain immutable evidence of this screening
+result; additional robustness evaluation must be added as a separate gate rather than editing
+this result after the fact.
+
 ## Workflow semantics
 
 `Phase 3B Evaluation` distinguishes two outcomes:
@@ -84,6 +123,7 @@ Do not change production retrieval until all of the following are true:
 4. the measured candidate reports `promotion.passed = true` under the pre-registered policy;
 5. no known blocker/high-severity defect remains.
 
-If the candidate is rejected, production remains BM25. Any subsequent model candidate must be
-evaluated as a new, explicitly documented experiment rather than by tuning the benchmark to
-the failed result.
+If the candidate is rejected, production remains BM25. If it passes, this authorizes only a
+separate production-integration gate. That gate must compare dense and hybrid retrieval on the
+real vector-store path because the screening result does not justify choosing one of them by
+assumption.
