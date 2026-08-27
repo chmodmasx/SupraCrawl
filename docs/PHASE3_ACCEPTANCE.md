@@ -9,6 +9,7 @@ Phase 3A adds measurement infrastructure, not a new ranking algorithm:
 - a versioned deterministic retrieval corpus;
 - versioned query relevance judgments (qrels);
 - English and Spanish queries plus intentionally cross-language semantic cases that expose lexical-search headroom;
+- multi-relevant queries with graded 3/2/1 judgments so nDCG exercises relevance ordering rather than behaving as a binary rank metric;
 - standard retrieval metrics: MRR@10, Recall@5, and graded nDCG@10;
 - p50/p95 query latency measurement;
 - approximate top-5 description token measurement;
@@ -27,6 +28,7 @@ The fixture is valid only when:
 - every query has at least one positive relevance judgment;
 - every relevance judgment references a document present in the corpus;
 - relevance grades are positive integers;
+- at least one query has multiple relevant documents with more than one positive grade;
 - the benchmark contains at least the minimum query count pinned in `evaluation/bm25_thresholds.json`;
 - no live third-party website is required to score retrieval quality.
 
