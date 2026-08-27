@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import json
+
+import httpx
+import pytest
+
+from supracrawl.chunking import Chunk
+from supracrawl.config import Settings
+from supracrawl.extractor import Extraction
+from supracrawl.fetcher import FetchResult
+from supracrawl.search import OpenSearchStore, document_id
+
+
+def test_document_id_uses_normalized_url_identity() -> None:
+    first = document_id("HTTPS://Example.COM:443/path?b=2&a=1#fragment")
+    second = document_id("https://example.com/path?a=1&b=2")
+    assert first == second
+
+
+@pytest.mark.asyncio
+async def test_index_document_writes_document_and_chunks_then_removes_stale_chunks(
+    monkeypatch,
+) -> None:
+    settings = Settings(opensearch_url="http://opensearch:9200")
+    store = OpenSearchStore(settings)
+    store._indices_ready = True
+    calls: list[tuple[str, str, dict]] = []
+
+    async def fake_request(method: str, path: str, **kwargs):
+        calls.append((method, path, kwargs))
+        if path.startswith("/_bulk"):
+            return httpx.Response(200, json={"errors": False, "items": []})
+        if "_delete_by_query" in path:
+            return httpx.Response(200, json={"deleted": 1})
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    monkeypatch.setattr(store, "_request", fake_request)
+
+    fetched = FetchResult(
+        fetch_url="https://example.com/article",
+        final_url="https://example.com/article",
+        status_code=200,
+        content_type="text/html",
+        html="<html></html>",
+        fetched_at="2026-08-27T12:00:00+00:00",
+    )
+    extraction = Extraction(
+        title="Article",
+        markdown="# Heading\n\nUseful text",
+        canonical_url="https://example.com/article",
+        extractor="readability",
+        quality=0.9,
+        rendered=False,
+    )
+    chunks = [
+        Chunk(
+            ordinal=0,
+            section_path=("Heading",),
+            text="# Heading\n\nUseful text",
+            approx_tokens=8,
+        )
+    ]
+
+    doc_id, count = await store.index_document(
+        fetched=fetched,
+        extraction=extraction,
+        chunks=chunks,
+        content_hash="a" * 64,
+    )
+
+    assert doc_id == document_id("https://example.com/article")
+    assert count == 1
+    assert len(calls) == 2
+
+    bulk_method, bulk_path, bulk_kwargs = calls[0]
+    assert bulk_method == "POST"
+    assert bulk_path == "/_bulk?refresh=wait_for"
+    bulk_lines = bulk_kwargs["content"].decode("utf-8").strip().splitlines()
+    assert len(bulk_lines) == 4
+    document_action = json.loads(bulk_lines[0])
+    document_source = json.loads(bulk_lines[1])
+    chunk_action = json.loads(bulk_lines[2])
+    chunk_source = json.loads(bulk_lines[3])
+    assert document_action["index"]["_index"] == settings.opensearch_documents_index
+    assert document_source["content_hash"] == "a" * 64
+    assert chunk_action["index"]["_index"] == settings.opensearch_chunks_index
+    assert chunk_source["document_id"] == doc_id
+    assert chunk_source["section_path"] == "Heading"
+
+    cleanup_method, cleanup_path, cleanup_kwargs = calls[1]
+    assert cleanup_method == "POST"
+    assert cleanup_path.startswith(f"/{settings.opensearch_chunks_index}/_delete_by_query")
+    must_not = cleanup_kwargs["json"]["query"]["bool"]["must_not"]
+    assert must_not == [{"term": {"content_hash": "a" * 64}}]
+
+
+@pytest.mark.asyncio
+async def test_search_uses_bm25_fields_and_collapses_by_document(monkeypatch) -> None:
+    settings = Settings(opensearch_url="http://opensearch:9200")
+    store = OpenSearchStore(settings)
+    store._indices_ready = True
+    captured: dict = {}
+
+    async def fake_request(method: str, path: str, **kwargs):
+        captured.update({"method": method, "path": path, "body": kwargs["json"]})
+        return httpx.Response(
+            200,
+            json={
+                "hits": {
+                    "hits": [
+                        {
+                            "_score": 4.25,
+                            "_source": {
+                                "document_id": "doc-1",
+                                "url": "https://example.com/article",
+                                "title": "SupraCrawl article",
+                                "section_path": "Architecture > Search",
+                                "text": "BM25 returns the most relevant passage for the indexed page.",
+                                "ordinal": 2,
+                                "fetched_at": "2026-08-27T12:00:00+00:00",
+                            },
+                        }
+                    ]
+                }
+            },
+        )
+
+    monkeypatch.setattr(store, "_request", fake_request)
+
+    results = await store.search("BM25 relevant passage", 5)
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == f"/{settings.opensearch_chunks_index}/_search"
+    assert captured["body"]["collapse"] == {"field": "document_id"}
+    fields = captured["body"]["query"]["bool"]["should"][0]["multi_match"]["fields"]
+    assert fields == ["title^4", "section_path^2", "text"]
+    assert results == [
+        {
+            "title": "SupraCrawl article",
+            "url": "https://example.com/article",
+            "description": "BM25 returns the most relevant passage for the indexed page.",
+            "position": 1,
+            "score": 4.25,
+            "metadata": {
+                "document_id": "doc-1",
+                "section_path": "Architecture > Search",
+                "chunk_ordinal": 2,
+                "fetched_at": "2026-08-27T12:00:00+00:00",
+            },
+        }
+    ]
