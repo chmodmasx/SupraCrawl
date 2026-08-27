@@ -29,6 +29,10 @@ class Extractor:
 
     async def extract(self, url: str) -> tuple[FetchResult, Extraction]:
         fetched = await self.fetcher.fetch_html(url)
+        extraction = await self.extract_fetched(fetched)
+        return fetched, extraction
+
+    async def extract_fetched(self, fetched: FetchResult) -> Extraction:
         metadata = self._metadata(fetched.html, fetched.final_url)
 
         extraction = await self._worker_extract(fetched.html, fetched.final_url, render=False)
@@ -55,7 +59,7 @@ class Extractor:
                 if rendered_is_better:
                     extraction = rendered
 
-        return fetched, extraction
+        return extraction
 
     async def _worker_extract(self, html: str, url: str, render: bool) -> Extraction | None:
         endpoint = "/render-extract" if render else "/extract"

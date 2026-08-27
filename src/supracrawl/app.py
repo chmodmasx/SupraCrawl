@@ -1,33 +1,50 @@
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 
 from . import __version__
 from .cache import JsonCache
 from .chunking import approx_tokens, chunk_markdown, select_chunks
 from .config import get_settings
+from .crawler import Crawler
 from .extractor import Extractor, content_hash
 from .fetcher import FetchError, HttpFetcher
+from .indexer import Indexer
 from .models import (
+    CrawlPage,
+    CrawlRequest,
+    CrawlResponse,
     ExtractedDocument,
     ExtractMetadata,
     ExtractRequest,
     ExtractResponse,
     HealthResponse,
+    IndexItem,
+    IndexRequest,
+    IndexResponse,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
 )
+from .search import OpenSearchStore, SearchBackendError
 from .security import UnsafeUrlError
 
 settings = get_settings()
 cache = JsonCache(settings.redis_url, settings.cache_ttl_s)
 fetcher = HttpFetcher(settings)
 extractor = Extractor(settings, fetcher)
+search_store = OpenSearchStore(settings)
+indexer = Indexer(settings, extractor, search_store)
+crawler = Crawler(fetcher, extractor, indexer)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     yield
     await cache.close()
+    await search_store.close()
 
 
 app = FastAPI(title="SupraCrawl", version=__version__, lifespan=lifespan)
@@ -118,3 +135,39 @@ async def extract(request: ExtractRequest) -> ExtractResponse:
         documents.append(document)
 
     return ExtractResponse(documents=documents)
+
+
+@app.post("/v1/index", response_model=IndexResponse)
+async def index_urls(request: IndexRequest) -> IndexResponse:
+    items: list[IndexItem] = []
+    for input_url in request.urls:
+        outcome = await indexer.index_url(str(input_url))
+        items.append(IndexItem.model_validate(asdict(outcome)))
+    return IndexResponse(items=items)
+
+
+@app.post("/v1/crawl", response_model=CrawlResponse)
+async def crawl(request: CrawlRequest) -> CrawlResponse:
+    outcomes = await crawler.crawl(
+        seeds=[str(seed) for seed in request.seeds],
+        max_pages=request.max_pages,
+        max_depth=request.max_depth,
+        same_origin=request.same_origin,
+    )
+    pages = [CrawlPage.model_validate(asdict(outcome)) for outcome in outcomes]
+    return CrawlResponse(
+        pages_visited=len(pages),
+        pages_indexed=sum(1 for page in pages if page.indexed),
+        pages=pages,
+    )
+
+
+@app.post("/v1/search", response_model=SearchResponse)
+async def search(request: SearchRequest) -> SearchResponse:
+    try:
+        raw_results = await search_store.search(request.query, request.limit)
+    except SearchBackendError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    results = [SearchResult.model_validate(result) for result in raw_results]
+    return SearchResponse(results=results)
