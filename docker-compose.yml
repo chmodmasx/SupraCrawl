@@ -1,0 +1,37 @@
+services:
+  api:
+    build: .
+    container_name: supracrawl-api
+    environment:
+      SUPRACRAWL_EXTRACTOR_WORKER_URL: http://extractor-worker:3000
+      SUPRACRAWL_REDIS_URL: redis://redis:6379/0
+      SUPRACRAWL_BROWSER_ENABLED: "true"
+      SUPRACRAWL_OBEY_ROBOTS_TXT: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      extractor-worker:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  extractor-worker:
+    build: ./services/extractor-worker
+    container_name: supracrawl-extractor
+    environment:
+      BROWSER_ENABLED: "true"
+      PORT: "3000"
+    shm_size: "512mb"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: supracrawl-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped

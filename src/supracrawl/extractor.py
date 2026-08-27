@@ -44,11 +44,12 @@ class Extractor:
             and self._needs_browser(extraction.markdown, fetched.html, extraction.quality)
         ):
             rendered = await self._worker_extract("", fetched.final_url, render=True)
-            if rendered and len(rendered.markdown) > len(extraction.markdown):
+            if rendered:
                 rendered.title = rendered.title or extraction.title
                 rendered.canonical_url = extraction.canonical_url
                 rendered.quality = self._quality(rendered.markdown, rendered.markdown)
-                extraction = rendered
+                if rendered.quality > extraction.quality or len(rendered.markdown) > len(extraction.markdown):
+                    extraction = rendered
 
         return fetched, extraction
 
@@ -57,7 +58,10 @@ class Extractor:
         payload = {"url": url} if render else {"url": url, "html": html}
         try:
             async with httpx.AsyncClient(timeout=self.settings.extractor_worker_timeout_s) as client:
-                response = await client.post(self.settings.extractor_worker_url.rstrip("/") + endpoint, json=payload)
+                response = await client.post(
+                    self.settings.extractor_worker_url.rstrip("/") + endpoint,
+                    json=payload,
+                )
                 response.raise_for_status()
                 data = response.json()
         except (httpx.HTTPError, ValueError):
@@ -122,12 +126,22 @@ class Extractor:
         ratio_score = min(1.0, ratio / 0.08)
         lines = [line.strip() for line in markdown.splitlines() if line.strip()]
         unique_ratio = len(set(lines)) / max(len(lines), 1)
-        return round(max(0.0, min(1.0, 0.55 * length_score + 0.25 * ratio_score + 0.20 * unique_ratio)), 4)
+        return round(
+            max(0.0, min(1.0, 0.55 * length_score + 0.25 * ratio_score + 0.20 * unique_ratio)),
+            4,
+        )
 
     def _needs_browser(self, markdown: str, html: str, quality: float) -> bool:
         lower = html.lower()
-        spa_shell = any(marker in lower for marker in ("id=\"__next\"", "id=\"root\"", "ng-version=", "data-reactroot"))
-        return len(markdown.strip()) < self.settings.min_useful_chars or quality < 0.35 or (spa_shell and quality < 0.6)
+        spa_shell = any(
+            marker in lower
+            for marker in ("id=\"__next\"", "id=\"root\"", "ng-version=", "data-reactroot")
+        )
+        return (
+            len(markdown.strip()) < self.settings.min_useful_chars
+            or quality < 0.35
+            or (spa_shell and quality < 0.6)
+        )
 
 
 def content_hash(markdown: str) -> str:

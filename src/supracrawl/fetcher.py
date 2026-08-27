@@ -34,7 +34,7 @@ class HttpFetcher:
         headers = {
             "User-Agent": self.settings.user_agent,
             "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
         }
 
         async with httpx.AsyncClient(
@@ -68,8 +68,12 @@ class HttpFetcher:
                             raise FetchError(f"Unsupported content type: {content_type or 'unknown'}")
 
                         declared = response.headers.get("content-length")
-                        if declared and int(declared) > self.settings.max_html_bytes:
-                            raise FetchError("Response exceeds configured HTML size limit")
+                        if declared:
+                            try:
+                                if int(declared) > self.settings.max_html_bytes:
+                                    raise FetchError("Response exceeds configured HTML size limit")
+                            except ValueError:
+                                pass
 
                         body = bytearray()
                         async for chunk in response.aiter_bytes():
