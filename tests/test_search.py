@@ -9,13 +9,29 @@ from supracrawl.chunking import Chunk
 from supracrawl.config import Settings
 from supracrawl.extractor import Extraction
 from supracrawl.fetcher import FetchResult
-from supracrawl.search import OpenSearchStore, document_id
+from supracrawl.search import OpenSearchStore, canonical_identity_url, document_id
 
 
 def test_document_id_uses_normalized_url_identity() -> None:
     first = document_id("HTTPS://Example.COM:443/path?b=2&a=1#fragment")
     second = document_id("https://example.com/path?a=1&b=2")
     assert first == second
+
+
+def test_same_host_canonical_can_define_document_identity() -> None:
+    identity = canonical_identity_url(
+        "https://example.com/article?utm_source=test&id=7",
+        "https://example.com/article?id=7",
+    )
+    assert identity == "https://example.com/article?id=7"
+
+
+def test_cross_origin_canonical_cannot_take_over_document_identity() -> None:
+    identity = canonical_identity_url(
+        "https://example.com/article?id=7",
+        "https://attacker.example/other-document",
+    )
+    assert identity == "https://example.com/article?id=7"
 
 
 @pytest.mark.asyncio
@@ -84,6 +100,7 @@ async def test_index_document_writes_document_and_chunks_then_removes_stale_chun
     chunk_source = json.loads(bulk_lines[3])
     assert document_action["index"]["_index"] == settings.opensearch_documents_index
     assert document_source["content_hash"] == "a" * 64
+    assert document_source["identity_url"] == "https://example.com/article"
     assert chunk_action["index"]["_index"] == settings.opensearch_chunks_index
     assert chunk_source["document_id"] == doc_id
     assert chunk_source["section_path"] == "Heading"
@@ -151,3 +168,37 @@ async def test_search_uses_bm25_fields_and_collapses_by_document(monkeypatch) ->
             },
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_search_recreates_missing_index_after_ready_state(monkeypatch) -> None:
+    settings = Settings(opensearch_url="http://opensearch:9200")
+    store = OpenSearchStore(settings)
+    store._indices_ready = True
+    calls: list[tuple[str, str]] = []
+    first_search = True
+
+    async def fake_request(method: str, path: str, **_kwargs):
+        nonlocal first_search
+        calls.append((method, path))
+        search_path = f"/{settings.opensearch_chunks_index}/_search"
+        if path == search_path and first_search:
+            first_search = False
+            return httpx.Response(404, json={"error": "index_not_found_exception"})
+        if method == "HEAD":
+            if path == f"/{settings.opensearch_documents_index}":
+                return httpx.Response(200)
+            if path == f"/{settings.opensearch_chunks_index}":
+                return httpx.Response(404)
+        if method == "PUT" and path == f"/{settings.opensearch_chunks_index}":
+            return httpx.Response(200, json={"acknowledged": True})
+        if path == search_path:
+            return httpx.Response(200, json={"hits": {"hits": []}})
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    monkeypatch.setattr(store, "_request", fake_request)
+
+    assert await store.search("anything", 5) == []
+    assert calls.count(("POST", f"/{settings.opensearch_chunks_index}/_search")) == 2
+    assert ("PUT", f"/{settings.opensearch_chunks_index}") in calls
+    assert store._indices_ready is True
