@@ -56,18 +56,19 @@ class SearchService:
         mode: SearchMode | None = None,
     ) -> SearchExecution:
         requested_mode: SearchMode = mode or self.settings.search_mode
-        candidate_limit = min(20, max(10, limit))
-
-        # The lexical path is the authoritative backbone. Its failure is never
-        # hidden by the optional dense path.
-        lexical = await self.store.search(query, candidate_limit)
 
         if requested_mode == "bm25":
+            lexical = await self.store.search(query, limit)
             return SearchExecution(
                 results=self._as_bm25(lexical, limit),
                 mode_requested="bm25",
                 mode_used="bm25",
             )
+
+        candidate_limit = min(20, max(10, limit))
+        # Hybrid still treats lexical retrieval as the authoritative backbone,
+        # but requests a wider candidate pool for deterministic RRF fusion.
+        lexical = await self.store.search(query, candidate_limit)
 
         if not self.settings.dense_enabled:
             return self._degraded(
