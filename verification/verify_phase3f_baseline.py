@@ -32,6 +32,10 @@ def _load_policy() -> dict[str, Any]:
     return payload
 
 
+def _write_output(path: str, content: str) -> None:
+    Path(path).write_text(content, encoding="utf-8")
+
+
 def _result_ranking(body: dict[str, Any], url_to_id: dict[str, str]) -> list[str]:
     results = body.get("results")
     if not isinstance(results, list) or not results:
@@ -257,7 +261,7 @@ async def _run() -> None:
     print(rendered)
     print("PHASE3F_BASELINE_JSON=" + json.dumps(report, ensure_ascii=False, sort_keys=True))
     if output_path:
-        Path(output_path).write_text(rendered + "\n", encoding="utf-8")
+        await asyncio.to_thread(_write_output, output_path, rendered + "\n")
     if not passed:
         raise RuntimeError("Phase 3F frozen baseline policy failed")
     print("Phase 3F frozen hybrid baseline: PASS")
