@@ -9,6 +9,7 @@ from .cache import JsonCache
 from .chunking import approx_tokens, chunk_markdown, select_chunks
 from .config import get_settings
 from .crawler import Crawler
+from .embeddings import DenseEmbedder
 from .extractor import Extractor, content_hash
 from .fetcher import FetchError, HttpFetcher
 from .indexer import Indexer
@@ -28,6 +29,7 @@ from .models import (
     SearchResponse,
     SearchResult,
 )
+from .retrieval import SearchService
 from .search import OpenSearchStore, SearchBackendError
 from .security import UnsafeUrlError
 
@@ -36,7 +38,14 @@ cache = JsonCache(settings.redis_url, settings.cache_ttl_s)
 fetcher = HttpFetcher(settings)
 extractor = Extractor(settings, fetcher)
 search_store = OpenSearchStore(settings)
-indexer = Indexer(settings, extractor, search_store)
+dense_embedder = DenseEmbedder(
+    model_name=settings.dense_model_name,
+    dimension=settings.dense_dimension,
+    query_prefix=settings.dense_query_prefix,
+    passage_prefix=settings.dense_passage_prefix,
+)
+search_service = SearchService(settings, search_store, dense_embedder)
+indexer = Indexer(settings, extractor, search_store, embedder=dense_embedder)
 crawler = Crawler(fetcher, extractor, indexer)
 
 
@@ -165,9 +174,19 @@ async def crawl(request: CrawlRequest) -> CrawlResponse:
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     try:
-        raw_results = await search_store.search(request.query, request.limit)
+        execution = await search_service.search(
+            request.query,
+            request.limit,
+            mode=request.mode,
+        )
     except SearchBackendError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    results = [SearchResult.model_validate(result) for result in raw_results]
-    return SearchResponse(results=results)
+    results = [SearchResult.model_validate(result) for result in execution.results]
+    return SearchResponse(
+        results=results,
+        mode_requested=execution.mode_requested,
+        mode_used=execution.mode_used,
+        degraded=execution.degraded,
+        degradation_reason=execution.degradation_reason,
+    )

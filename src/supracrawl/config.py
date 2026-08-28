@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +38,8 @@ class Settings(BaseSettings):
     opensearch_documents_index: str = "supracrawl-documents-v1"
     opensearch_chunks_index: str = "supracrawl-chunks-v1"
 
+    search_mode: Literal["bm25", "hybrid"] = "bm25"
+    hybrid_rrf_k: int = Field(default=60, ge=1, le=10_000)
     dense_enabled: bool = False
     dense_model_name: str = "intfloat/multilingual-e5-small"
     dense_dimension: int = Field(default=384, ge=1, le=65_535)

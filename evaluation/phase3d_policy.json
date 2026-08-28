@@ -1,0 +1,123 @@
+{
+  "phase": "3D",
+  "benchmark": "phase3d-controlled-hybrid-production-v1",
+  "base_main_sha": "cdc0f9bb5f8bd3d0c9cebf1057aa802fbc96732d",
+  "purpose": "Certify real hybrid retrieval as a production-capable opt-in path without changing the default BM25 behavior.",
+  "production_default": {
+    "search_mode": "bm25",
+    "dense_enabled": false,
+    "must_remain_unchanged_in_phase3d": true
+  },
+  "request_modes": [
+    "bm25",
+    "hybrid"
+  ],
+  "request_mode_semantics": {
+    "omitted": "use configured search_mode",
+    "explicit_bm25": "use lexical BM25 only",
+    "explicit_hybrid": "attempt BM25 plus local dense retrieval and deterministic RRF"
+  },
+  "hybrid": {
+    "model": "intfloat/multilingual-e5-small",
+    "dimension": 384,
+    "query_prefix": "query: ",
+    "passage_prefix": "passage: ",
+    "rrf_k": 60,
+    "vector_backend": {
+      "engine": "lucene",
+      "method": "flat",
+      "space_type": "cosinesimil"
+    }
+  },
+  "result_integrity": {
+    "require_current_content_hash_for_dense_candidates": true,
+    "stale_vector_candidate_policy": "discard",
+    "vector_validation_failure_policy": "degrade_to_bm25",
+    "lexical_failure_policy": "fail_request"
+  },
+  "degradation": {
+    "embedder_unavailable": "bm25",
+    "vector_index_unavailable": "bm25",
+    "vector_mapping_invalid": "bm25",
+    "current_hash_validation_unavailable": "bm25",
+    "dense_disabled_for_hybrid_request": "bm25",
+    "must_be_explicit_in_response_metadata": true
+  },
+  "indexing": {
+    "lexical_write_is_authoritative": true,
+    "vector_write_when_dense_enabled": true,
+    "vector_failure_must_not_invalidate_successful_lexical_write": true,
+    "vector_status_must_be_reported": true,
+    "stale_vector_cleanup_required_on_success": true,
+    "read_time_hash_validation_required_even_if_cleanup_exists": true
+  },
+  "api_gate": {
+    "legacy_request_without_mode_uses": "bm25",
+    "explicit_hybrid_success_uses": "hybrid",
+    "hybrid_failure_uses": "bm25",
+    "bm25_backend_failure_http_status": 503,
+    "backward_compatible_results_field": true
+  },
+  "hermes_gate": {
+    "provider_contract_unchanged": true,
+    "provider_search_request_does_not_need_mode": true,
+    "default_hermes_search_remains_bm25_in_phase3d": true
+  },
+  "frozen_spot_queries": {
+    "exact_identifier": [
+      {
+        "id": "q21-current-sha",
+        "query": "37be2292e5c4737247c940b83860a13de4ea7eb4",
+        "target": "phase3b-current-sha",
+        "required_rank_max": 1
+      },
+      {
+        "id": "q22-previous-sha",
+        "query": "7488abd1101054fe65dbe685054fb5343aca852f",
+        "target": "phase3a-previous-sha",
+        "required_rank_max": 1
+      }
+    ],
+    "semantic": [
+      {
+        "id": "q13-cross-language-rrf",
+        "query": "fusionar resultados de dos buscadores sin entrenar un modelo",
+        "target": "rrf-hybrid",
+        "required_rank_max": 5
+      },
+      {
+        "id": "q14-cross-language-dense",
+        "query": "representaciones numéricas multilingües para similitud semántica",
+        "target": "dense-embeddings",
+        "required_rank_max": 5
+      }
+    ]
+  },
+  "performance": {
+    "warm_hybrid_api_p95_ms_max": 500,
+    "first_model_download_excluded": true,
+    "query_embedding_included": true
+  },
+  "packaging": {
+    "hosted_embedding_api_allowed": false,
+    "standard_api_image_must_contain_local_hybrid_runtime": true,
+    "model_must_load_lazily": true,
+    "bm25_request_must_not_require_model_load": true
+  },
+  "certification": {
+    "ruff_required": true,
+    "full_python_suite_required": true,
+    "real_opensearch_required": true,
+    "real_api_e2e_required": true,
+    "real_hermes_contract_required": true,
+    "all_prior_phase_workflows_required": true,
+    "phase3d_workflow_required": true,
+    "clean_compose_teardown_required": true,
+    "known_blocker_or_high_defects_allowed": 0
+  },
+  "promotion": {
+    "phase3d_pass_means": "hybrid is certified as a production-capable opt-in mode",
+    "phase3d_pass_does_not_mean": "change the global default from bm25 to hybrid",
+    "default_change_requires_separate_gate": true
+  }
+}
