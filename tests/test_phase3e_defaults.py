@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from supracrawl.config import Settings
@@ -8,6 +10,9 @@ from supracrawl.extractor import Extraction
 from supracrawl.fetcher import FetchResult
 from supracrawl.indexer import Indexer
 from supracrawl.retrieval import SearchService
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _result(document_id: str, position: int) -> dict:
@@ -104,6 +109,15 @@ def test_operator_environment_can_opt_out_to_bm25(monkeypatch) -> None:
 
     assert settings.search_mode == "bm25"
     assert settings.dense_enabled is False
+
+
+def test_compose_propagates_dense_dimension_override() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert (
+        'SUPRACRAWL_DENSE_DIMENSION: "${SUPRACRAWL_DENSE_DIMENSION:-384}"'
+        in compose
+    )
 
 
 @pytest.mark.asyncio
