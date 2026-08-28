@@ -1,4 +1,4 @@
-name: Phase 3D Verification
+name: Phase 3E Verification
 
 on:
   push:
@@ -64,9 +64,9 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/hermes-agent:${{ github.workspace }}
         run: pytest -q verification/test_hermes_provider_contract.py
 
-  live-hybrid-e2e:
+  live-default-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -75,10 +75,7 @@ jobs:
           cache: pip
       - name: Install host verification runtime
         run: pip install -e '.[dev,hybrid]'
-      - name: Build and start real hybrid-capable stack
-        env:
-          SUPRACRAWL_DENSE_ENABLED: "true"
-          SUPRACRAWL_SEARCH_MODE: bm25
+      - name: Build and start stack with repository defaults
         run: docker compose up -d --build
       - name: Wait for API and OpenSearch
         run: |
@@ -92,31 +89,24 @@ jobs:
             fi
             sleep 2
           done
-          echo "Phase 3D stack did not become healthy" >&2
+          echo "Phase 3E default stack did not become healthy" >&2
           exit 1
       - name: Verify standard API image contains local hybrid runtime
         run: docker compose exec -T api python -c "import fastembed; print(fastembed.__version__)"
-      - name: Run real hybrid API verification
+      - name: Run omitted-mode default quality and upgrade verification
         env:
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-          SUPRACRAWL_DENSE_ENABLED: "false"
-          SUPRACRAWL_SEARCH_MODE: bm25
-        run: python verification/verify_phase3d_hybrid.py
-      - name: Verify production indexing and physical stale-vector guard
+        run: python verification/verify_phase3e_default.py
+      - name: Run omitted-mode vector and lexical fault matrix
         env:
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-        run: python verification/verify_phase3d_indexing.py
-      - name: Run live vector and lexical fault matrix
-        env:
-          SUPRACRAWL_API_URL: http://127.0.0.1:8080
-          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-        run: python verification/verify_phase3d_faults.py
+        run: python verification/verify_phase3e_faults.py
       - name: Restart API with dense capability disabled
         env:
           SUPRACRAWL_DENSE_ENABLED: "false"
-          SUPRACRAWL_SEARCH_MODE: bm25
+          SUPRACRAWL_SEARCH_MODE: hybrid
         run: |
           docker compose stop api
           docker compose up -d api
@@ -126,20 +116,47 @@ jobs:
             fi
             sleep 2
           done
-          echo "Dense-disabled API did not become healthy" >&2
+          echo "Phase 3E dense-disabled API did not become healthy" >&2
           exit 1
-      - name: Verify explicit hybrid degrades when dense is disabled
+      - name: Verify omitted-mode default degrades when dense is disabled
         env:
-          PHASE3D_DENSE_DISABLED_ONLY: "1"
+          PHASE3E_DENSE_DISABLED_ONLY: "1"
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-        run: python verification/verify_phase3d_faults.py
+        run: python verification/verify_phase3e_faults.py
+      - name: Restart API with embedding dimension mismatch
+        env:
+          SUPRACRAWL_DENSE_ENABLED: "true"
+          SUPRACRAWL_SEARCH_MODE: hybrid
+          SUPRACRAWL_DENSE_DIMENSION: "385"
+        run: |
+          docker compose stop api
+          docker compose up -d api
+          actual_dimension="$(docker compose exec -T api printenv SUPRACRAWL_DENSE_DIMENSION | tr -d '\r')"
+          if [ "$actual_dimension" != "385" ]; then
+            echo "dense dimension override was not propagated to API container: $actual_dimension" >&2
+            exit 1
+          fi
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8080/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Phase 3E embedding-mismatch API did not become healthy" >&2
+          exit 1
+      - name: Verify omitted-mode default degrades on embedding mismatch
+        env:
+          PHASE3E_EMBEDDING_MISMATCH_ONLY: "1"
+          SUPRACRAWL_API_URL: http://127.0.0.1:8080
+          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+        run: python verification/verify_phase3e_faults.py
       - name: Container state
         if: always()
         run: docker compose ps -a
       - name: Container logs
         if: failure()
-        run: docker compose logs --no-color --tail=500
+        run: docker compose logs --no-color --tail=600
       - name: Tear down
         if: always()
         run: docker compose down -v --remove-orphans

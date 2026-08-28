@@ -16,7 +16,7 @@ The project separates three concerns:
 2. **Extraction** — convert a URL into clean, structured content.
 3. **Retrieval** — search already processed content and return only the most relevant passages.
 
-SupraCrawl is not attempting to build a whole-web search engine in one step. The current search capability operates over the corpus that SupraCrawl has explicitly indexed or crawled.
+SupraCrawl is not attempting to build a whole-web search engine in one step. Search operates over the corpus that SupraCrawl has explicitly indexed or crawled.
 
 ## Current architecture
 
@@ -32,22 +32,26 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. The
           |             |             |
       /v1/search    /v1/index     /v1/extract
           |             |             |
-      OpenSearch      Indexer      Extraction
-       chunks +          |             |
-      documents      HTTP fetch     HTTP-first
-          |             |             |
-       BM25         Readability      clean enough?
-          |          / Trafilatura   /          \
-      collapse by        |          yes          no
-       document       chunking       |            |
-          |             |        static       Playwright
-      top passage -------+-------- extraction   fallback
+      Retrieval       Indexer      Extraction
+      /      \           |             |
+   BM25      dense     HTTP fetch    HTTP-first
+     \        /          |             |
+        RRF          chunking       clean enough?
+         |               |          /          \
+   current-hash      lexical +     yes          no
+     guard           vector write   |            |
+         |               |       static       Playwright
+   document collapse ----+------- extraction   fallback
+         |
+   compact passages
 ```
+
+The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
 ## Design rules
 
 - HTTP fetch first; browser rendering only as fallback.
-- No generative LLM in the normal extraction or BM25 retrieval path.
+- No generative LLM in extraction or retrieval.
 - Preserve headings, lists, tables, code blocks and useful links.
 - Treat `rel=canonical` as a signal, not an absolute truth.
 - Block SSRF destinations and revalidate every redirect.
@@ -56,7 +60,9 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. The
 - Store provenance and extraction metadata.
 - Do not return full pages to the agent by default.
 - Search chunks, but collapse results by document so one page cannot occupy every result slot.
-- Introduce embeddings and rerankers only after a benchmark proves the gain.
+- Keep lexical indexing authoritative even when vector indexing fails.
+- Validate dense candidates against the current document `content_hash` before fusion.
+- Introduce rerankers only after a benchmark proves an additional gain.
 
 ## API
 
@@ -74,7 +80,7 @@ Fetches and cleans up to 10 URLs, then returns only the selected passages that f
 POST /v1/index
 ```
 
-Fetches, extracts, chunks and indexes up to 50 explicit URLs into separate OpenSearch `documents` and `chunks` indexes.
+Fetches, extracts and chunks up to 50 explicit URLs. Under the promoted defaults, successful lexical indexing is followed by local E5 embedding and OpenSearch vector indexing. A vector-side failure is reported without erasing a successful lexical write.
 
 ### Crawl
 
@@ -90,7 +96,33 @@ Runs a bounded breadth-first crawl using the same SSRF, redirect, MIME, size and
 POST /v1/search
 ```
 
-Runs a BM25 baseline over title, heading path and chunk text. Results are collapsed by document ID and return an extractive passage as the description.
+A request that omits `mode` uses the configured default. The promoted default is `hybrid`, combining BM25 and local multilingual E5 retrieval with RRF. `mode: "bm25"` remains available for an explicit lexical-only request.
+
+Hybrid responses report `mode_requested`, `mode_used`, `degraded`, and `degradation_reason`. If the vector path is disabled or unavailable, the request falls back to BM25; failure of the lexical backbone remains a request failure.
+
+## Retrieval defaults
+
+```text
+SUPRACRAWL_SEARCH_MODE=hybrid
+SUPRACRAWL_DENSE_ENABLED=true
+```
+
+Operator opt-out:
+
+```text
+SUPRACRAWL_SEARCH_MODE=bm25
+SUPRACRAWL_DENSE_ENABLED=false
+```
+
+The certified hybrid configuration is:
+
+- `intfloat/multilingual-e5-small`
+- 384 dimensions
+- E5 `query: ` / `passage: ` prefixes
+- RRF `k=60`
+- OpenSearch Lucene `flat` cosine vector index
+
+No hosted embedding API or API key is required.
 
 ## Local stack
 
@@ -100,7 +132,7 @@ docker compose up -d --build
 
 The Compose stack includes:
 
-- FastAPI API
+- FastAPI API with the local FastEmbed/ONNX hybrid runtime
 - Readability / Playwright extraction worker
 - Redis extraction cache
 - OpenSearch 3.8.0
@@ -123,55 +155,49 @@ web:
   extract_backend: supracrawl
 ```
 
+The Hermes provider does not need a SupraCrawl-specific retrieval-mode field. It uses the backend default, so a healthy default deployment uses hybrid retrieval and transparently receives BM25 results when the vector side degrades.
+
 Search covers only content already present in the SupraCrawl index. A separate discovery provider can still be used while building the corpus.
 
 ## Roadmap
 
 ### Phase 1 — Extraction — certified
 
-- FastAPI service
-- HTTPX fetcher
-- URL normalization and SSRF protection
-- deterministic DOM cleanup
-- Mozilla Readability worker
-- Playwright fallback for JS-heavy pages
-- structural chunking
-- context-budgeted output
-- extraction quality signals
-- Redis caching
-- Hermes `web_extract`
-- deterministic, live E2E and real-Hermes contract gates
+HTTP-first extraction, Readability/Trafilatura, Playwright fallback, structural chunking, context budgeting, Redis caching, SSRF/robots controls, Hermes `web_extract`, deterministic/live/real-Hermes gates.
 
-### Phase 2 — Search / index — current milestone
+### Phase 2 — Search / index — certified
 
-- OpenSearch `documents` + `chunks` indexes
-- explicit URL indexer
-- bounded same-origin crawler
-- stable canonical document IDs
-- stale-chunk cleanup on reindex
-- BM25 baseline
-- document diversity via result collapse
-- extractive snippets
-- `/v1/search`
-- Hermes `web_search`
-- dedicated deterministic, live E2E and real-Hermes contract gates
+OpenSearch document/chunk indexes, explicit indexing, bounded crawler, stable document identity, stale-chunk cleanup, BM25, result collapse, `/v1/search`, Hermes `web_search`, deterministic/live/real-Hermes gates.
 
-### Phase 2B — Relevance upgrades, only if benchmarks justify them
+### Phase 3A — Retrieval evaluation — certified
 
-- multilingual-E5-small dense retrieval baseline
-- BM25 + dense fusion with RRF
-- optional BGE reranker over a small top-N
-- language-aware relevance evaluation
+Versioned corpus and qrels, MRR@10, Recall@5, graded nDCG@10, latency/context measurements, frozen BM25 baseline.
 
-### Phase 3 — Quality and scale
+### Phase 3B — Dense/hybrid experiment — certified
 
-- benchmark corpus and relevance judgments
-- continuous crawling and refresh policies
-- per-domain extraction rules
-- observability and backpressure
-- persistent object storage for originals/provenance where needed
-- optional model-assisted cleanup for hard residual cases only
+Local multilingual E5 baseline and deterministic BM25+dense/RRF comparison on the frozen benchmark.
+
+### Phase 3C — Real vector candidate selection — certified
+
+Real OpenSearch vector storage/querying, expanded exact-identifier benchmark, physical stale-vector replacement checks, and hybrid selected as the only eligible candidate.
+
+### Phase 3D — Controlled hybrid production capability — certified
+
+Production local embedding/index/search path, current-content hash validation, vector-side degradation to BM25, lexical failure semantics, standard-container packaging, and real API fault matrix. Hybrid remained opt-in during this phase.
+
+### Phase 3E — Hybrid default promotion — current gate
+
+Promote the already-certified hybrid path to the global default only if omitted-mode API requests preserve the frozen quality, exact-identifier, latency, upgrade, fallback and Hermes gates. No ranking/model/schema changes are allowed in this phase.
+
+### Later measured work
+
+- optional reranker over a small top-N, only if a separate benchmark proves additional value;
+- continuous crawling and refresh policies;
+- per-domain extraction rules;
+- observability and backpressure;
+- persistent originals/provenance storage where justified;
+- scale-specific ANN/GPU work only when corpus/load measurements require it.
 
 ## Verification policy
 
-A phase is not considered complete because it compiles or because a unit suite is green. Each milestone must pass its deterministic suite, container checks, live E2E acceptance matrix and pinned real-Hermes contract test before it is merged to `main` and declared certified.
+A phase is not considered complete because it compiles or because a unit suite is green. Each milestone must pass its deterministic suite, container checks, live E2E acceptance matrix and pinned real-Hermes contract test on the exact candidate SHA and again on the exact merged `main` SHA before it is declared certified.

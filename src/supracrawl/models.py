@@ -61,8 +61,8 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     success: bool = True
     results: list[SearchResult]
-    mode_requested: SearchMode = "bm25"
-    mode_used: SearchMode = "bm25"
+    mode_requested: SearchMode = "hybrid"
+    mode_used: SearchMode = "hybrid"
     degraded: bool = False
     degradation_reason: str | None = None
 
