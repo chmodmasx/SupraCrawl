@@ -95,8 +95,9 @@ async def _seed_fault_fixture(
 ) -> str:
     corpus = _load_jsonl(EXACT_CORPUS_PATH)
     queries = _load_jsonl(EXACT_QUERIES_PATH)
-    query = next(item["query"] for item in queries if item["id"] == "q21-current-sha")
-    target_id = next(iter(next(item for item in queries if item["id"] == "q21-current-sha")["relevance"]))
+    target_query = next(item for item in queries if item["id"] == "q21-current-sha")
+    query = target_query["query"]
+    target_id = next(iter(target_query["relevance"]))
     target = next(document for document in corpus if document["id"] == target_id)
 
     await _clear_indices(store, store.settings)
