@@ -54,6 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build and start complete stack
+        env:
+          SUPRACRAWL_DENSE_ENABLED: "false"
+          SUPRACRAWL_SEARCH_MODE: bm25
         run: docker compose up -d --build
       - name: Run Phase 2 live acceptance matrix
         run: python3 verification/verify_search_live.py
