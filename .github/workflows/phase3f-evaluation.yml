@@ -13,7 +13,7 @@ permissions:
 jobs:
   frozen-hybrid-baseline:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install evaluation runtime
-        run: pip install -e '.[dev,hybrid]'
+        run: pip install -e '.[dev,hybrid]' 'fastembed==0.8.0'
       - name: Ruff
         run: ruff check .
       - name: Python regression suite
@@ -64,6 +64,26 @@ jobs:
         with:
           name: phase3f-frozen-hybrid-baseline
           path: phase3f-baseline.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run preregistered candidate 1 reranker experiment
+        env:
+          SUPRACRAWL_API_URL: http://127.0.0.1:8080
+          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+          PHASE3F_CANDIDATE1_OUTPUT: phase3f-candidate1.json
+        run: python verification/verify_phase3f_candidate1.py
+      - name: Show candidate 1 artifact
+        if: always()
+        run: |
+          if [ -f phase3f-candidate1.json ]; then
+            cat phase3f-candidate1.json
+          fi
+      - name: Upload candidate 1 artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3f-candidate1-mmarco-minilmv2-qint8-avx2
+          path: phase3f-candidate1.json
           if-no-files-found: error
           retention-days: 14
       - name: Container state
