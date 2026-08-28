@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "benchmark": "phase3f-reranker-screen-v1",
+  "source": {
+    "base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd",
+    "candidate_head_sha": "12c8a3c94767507310bd47b47f2682f4987f0971",
+    "workflow_run_id": 33178803304,
+    "workflow_job_id": 98874355360,
+    "artifact_id": 9688866896,
+    "artifact_name": "phase3f-frozen-hybrid-baseline",
+    "artifact_sha256": "3f18420937f826e5068415bf5a9bc99edf14e77f2990613e1fcee6d5757573fe",
+    "artifact_created_at": "2026-08-28T14:12:39Z"
+  },
+  "candidate_pool_size": 10,
+  "documents": 30,
+  "queries": 30,
+  "aggregate": {
+    "bm25": {
+      "mrr_at_10": 0.916667,
+      "recall_at_5": 0.933333,
+      "ndcg_at_10": 0.912075
+    },
+    "hybrid": {
+      "mrr_at_10": 0.961111,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.965792
+    },
+    "hybrid_ndcg_delta_vs_bm25": 0.053717,
+    "hybrid_candidate_recall_at_10": 1.0
+  },
+  "latency_ms": {
+    "bm25_p50": 24.179,
+    "bm25_p95": 38.531,
+    "hybrid_p50": 87.077,
+    "hybrid_p95": 129.104,
+    "hybrid_mean": 91.872
+  },
+  "baseline": {
+    "passed": true,
+    "checks": {
+      "hybrid_mrr_gte_bm25": true,
+      "hybrid_recall_at_5_gte_bm25": true,
+      "hybrid_ndcg_gte_bm25": true,
+      "candidate_recall_at_10": true,
+      "warm_hybrid_api_p95": true
+    }
+  },
+  "remaining_ranking_headroom": {
+    "perfect_query_count": 27,
+    "imperfect_query_count": 3,
+    "max_possible_ndcg_at_10": 1.0,
+    "max_possible_delta_vs_frozen_hybrid": 0.034208,
+    "promotion_min_delta": 0.02,
+    "promotion_min_ndcg_at_10": 0.985792,
+    "imperfect_queries": [
+      {
+        "id": "q13-cross-language-rrf",
+        "language": "es",
+        "hybrid_ndcg_at_10": 0.5,
+        "candidate_recall_at_10": 1.0,
+        "hybrid_top10": [
+          "spanish-bm25",
+          "spanish-extraction",
+          "rrf-hybrid",
+          "result-collapse",
+          "opensearch-bm25",
+          "opensearch-380-release",
+          "dense-embeddings",
+          "docker-compose",
+          "asyncio-locks",
+          "stale-chunk-reindex"
+        ]
+      },
+      {
+        "id": "q14-cross-language-dense",
+        "language": "es",
+        "hybrid_ndcg_at_10": 0.63093,
+        "candidate_recall_at_10": 1.0,
+        "hybrid_top10": [
+          "spanish-bm25",
+          "dense-embeddings",
+          "e5-model-id",
+          "bge-model-id",
+          "spanish-extraction",
+          "phase3b-current-sha",
+          "cve-spring4shell",
+          "rrf-hybrid",
+          "opensearch-bm25",
+          "cve-log4shell"
+        ]
+      },
+      {
+        "id": "q16-search-ranking-integrity",
+        "language": "en",
+        "hybrid_ndcg_at_10": 0.842828,
+        "candidate_recall_at_10": 1.0,
+        "hybrid_top10": [
+          "result-collapse",
+          "opensearch-bm25",
+          "stale-chunk-reindex",
+          "spanish-bm25",
+          "search-endpoint",
+          "opensearch-370-release",
+          "observability",
+          "opensearch-timeout-env",
+          "opensearch-380-release",
+          "asyncio-locks"
+        ]
+      }
+    ]
+  }
+}
