@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "experiment": "phase3f-candidate1-mmarco-minilmv2-qint8-avx2-v1",
+  "source": {
+    "evaluated_head_sha": "761ac635eab8364a8fd1cdc98082e195db49f547",
+    "workflow_run_id": 33187524717,
+    "workflow_job_id": 98904276696,
+    "artifact_id": 9692435901,
+    "artifact_name": "phase3f-candidate1-mmarco-minilmv2-qint8-avx2",
+    "artifact_sha256": "a532dca13e2b4f2e30490bbfebc5934baebdef162944de38dd44aa8e54ab1696",
+    "workflow_matrix": "9/9 success"
+  },
+  "candidate": {
+    "id": "candidate1-mmarco-minilmv2-l12-qint8-avx2",
+    "model_repo": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd6",
+    "model_file": "onnx/model_quint8_avx2.onnx",
+    "model_file_sha256": "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+    "license": "apache-2.0",
+    "fastembed": "0.8.0"
+  },
+  "benchmark": {
+    "documents": 30,
+    "queries": 30,
+    "candidate_pool_size": 10,
+    "frozen_hybrid": {
+      "mrr_at_10": 0.961111,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.965792
+    },
+    "reranked": {
+      "mrr_at_10": 1.0,
+      "recall_at_5": 0.988889,
+      "ndcg_at_10": 0.992857
+    },
+    "delta": {
+      "mrr_regression_vs_frozen_hybrid": -0.038889,
+      "recall_at_5_regression_vs_frozen_hybrid": 0.011111,
+      "ndcg_at_10_delta_vs_frozen_hybrid": 0.027065
+    }
+  },
+  "runtime": {
+    "first_stage_hybrid_p95_ms": 84.085,
+    "reranker_p50_ms": 167.315,
+    "reranker_p95_ms": 203.037,
+    "reranker_mean_ms": 173.739,
+    "reranker_warmup_ms": 169.857,
+    "rerank_cpu_total_s": 18.27568,
+    "rerank_cpu_mean_s": 0.609189,
+    "model_load_cpu_s": 0.820689,
+    "peak_rss_delta_mib": 428.828
+  },
+  "promotion": {
+    "decision": "REJECT",
+    "passed": false,
+    "checks": {
+      "ndcg_material_improvement": true,
+      "mrr_no_regression": true,
+      "recall_no_regression": false,
+      "p95_added_latency": true,
+      "peak_rss_delta": true
+    }
+  },
+  "rejection_evidence": {
+    "failed_guardrail": "Recall@5 must not regress from the frozen hybrid baseline",
+    "aggregate_recall_at_5": {
+      "frozen_hybrid": 1.0,
+      "reranked": 0.988889
+    },
+    "decisive_query": {
+      "id": "q16-search-ranking-integrity",
+      "hybrid_ndcg_at_10": 0.842828,
+      "reranked_ndcg_at_10": 0.942873,
+      "hybrid_top_relevant_positions": {
+        "result-collapse": 1,
+        "opensearch-bm25": 2,
+        "stale-chunk-reindex": 3
+      },
+      "reranked_top_relevant_positions": {
+        "opensearch-bm25": 1,
+        "result-collapse": 3,
+        "stale-chunk-reindex": 6
+      },
+      "interpretation": "The reranker improves graded ordering but pushes a relevant document outside top 5, so nDCG improves while Recall@5 regresses."
+    }
+  },
+  "decision_rule": "Candidate 1 is rejected without weakening the preregistered Phase 3F policy. No production integration is allowed from this result."
+}
