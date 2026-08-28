@@ -100,6 +100,8 @@ jobs:
         env:
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+          SUPRACRAWL_DENSE_ENABLED: "false"
+          SUPRACRAWL_SEARCH_MODE: bm25
         run: python verification/verify_phase3d_hybrid.py
       - name: Verify production indexing and physical stale-vector guard
         env:
