@@ -66,24 +66,79 @@ jobs:
           path: phase3f-baseline.json
           if-no-files-found: error
           retention-days: 14
+      - name: Cache candidate 1 model snapshot
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: phase3f-mmarco-minilmv2-1427fd6-6c251376
+      - name: Smoke candidate 1 model runtime
+        timeout-minutes: 12
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          sys.path.insert(0, "verification")
+          from verify_phase3f_candidate1 import (
+              CANDIDATE_POLICY_PATH,
+              _load_object,
+              _prepare_reranker,
+              _score_timed,
+          )
+
+          candidate = _load_object(CANDIDATE_POLICY_PATH)["candidate"]
+          print("PHASE3F_CANDIDATE1_SMOKE_STAGE=prepare", flush=True)
+          reranker, model_report = _prepare_reranker(candidate)
+          print(
+              "PHASE3F_CANDIDATE1_SMOKE_MODEL="
+              + json.dumps(model_report, sort_keys=True),
+              flush=True,
+          )
+          documents = [
+              f"Synthetic Phase 3F smoke document {index}. Multilingual retrieval reranking."
+              for index in range(10)
+          ]
+          scores, latency_ms, cpu_s = _score_timed(
+              reranker,
+              "multilingual retrieval reranking",
+              documents,
+          )
+          smoke = {
+              "score_count": len(scores),
+              "latency_ms": round(latency_ms, 3),
+              "cpu_s": round(cpu_s, 6),
+          }
+          print(
+              "PHASE3F_CANDIDATE1_SMOKE_INFERENCE="
+              + json.dumps(smoke, sort_keys=True),
+              flush=True,
+          )
+          PY
       - name: Run preregistered candidate 1 reranker experiment
         env:
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
           PHASE3F_CANDIDATE1_OUTPUT: phase3f-candidate1.json
-        run: python verification/verify_phase3f_candidate1.py
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -o pipefail
+          python verification/verify_phase3f_candidate1.py 2>&1 | tee phase3f-candidate1.log
       - name: Show candidate 1 artifact
         if: always()
         run: |
           if [ -f phase3f-candidate1.json ]; then
             cat phase3f-candidate1.json
           fi
-      - name: Upload candidate 1 artifact
-        if: success()
+      - name: Upload candidate 1 evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase3f-candidate1-mmarco-minilmv2-qint8-avx2
-          path: phase3f-candidate1.json
+          path: |
+            phase3f-candidate1.json
+            phase3f-candidate1.log
           if-no-files-found: error
           retention-days: 14
       - name: Container state
