@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "experiment": "phase3f-candidate1-mmarco-minilmv2-qint8-avx2-v1",
+  "candidate_id": "candidate1-mmarco-minilmv2-l12-qint8-avx2",
+  "base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd",
+  "frozen_baseline_commit_sha": "950909c7ead38090fe805fb3f803f58062140477",
+  "candidate_pool_size": 10,
+  "ranking_strategy": "score_desc_stable_first_stage_ties",
+  "document_representation": "title_newline_description",
+  "warmup_excluded_from_p95": true,
+  "candidate": {
+    "model_repo": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd6",
+    "runtime_model_alias": "phase3f/mmarco-mMiniLMv2-L12-H384-v1-qint8-avx2",
+    "model_file": "onnx/model_quint8_avx2.onnx",
+    "model_file_sha256": "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+    "license": "apache-2.0",
+    "languages": 15,
+    "required_files": [
+      "config.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "special_tokens_map.json",
+      "sentencepiece.bpe.model",
+      "onnx/model_quint8_avx2.onnx"
+    ]
+  },
+  "runtime": {
+    "engine": "fastembed-text-cross-encoder",
+    "fastembed": "0.8.0",
+    "inference": "onnxruntime-cpu",
+    "hosted_inference": false
+  },
+  "selection_rationale": [
+    "multilingual cross-encoder trained on mMARCO",
+    "permissive Apache-2.0 license",
+    "official repository provides a 119 MB AVX2 quantized ONNX artifact",
+    "substantially smaller CPU screening candidate than bge-reranker-v2-m3",
+    "candidate result may be REJECT without changing the frozen Phase 3F promotion policy"
+  ],
+  "promotion_policy_path": "evaluation/phase3f_policy.json"
+}
