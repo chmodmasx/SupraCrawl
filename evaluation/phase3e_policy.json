@@ -1,0 +1,102 @@
+{
+  "phase": "3E",
+  "benchmark": "phase3e-hybrid-default-promotion-v1",
+  "base_main_sha": "f06c19d14b01bc053b912f1ad9244bcac184ea66",
+  "purpose": "Decide whether the already-certified hybrid retrieval path can become the global default without weakening relevance, exact-identifier behavior, latency, fallback safety, or Hermes compatibility.",
+  "production_default_before": {
+    "search_mode": "bm25",
+    "dense_enabled": false
+  },
+  "production_default_after_if_certified": {
+    "search_mode": "hybrid",
+    "dense_enabled": true
+  },
+  "retrieval_configuration_must_not_change": {
+    "model": "intfloat/multilingual-e5-small",
+    "dimension": 384,
+    "query_prefix": "query: ",
+    "passage_prefix": "passage: ",
+    "rrf_k": 60,
+    "vector_backend": {
+      "engine": "lucene",
+      "method": "flat",
+      "space_type": "cosinesimil"
+    }
+  },
+  "default_api_quality_gate": {
+    "fixture": "phase3c-expanded-30-query-corpus",
+    "request_mode_field": "omitted",
+    "mrr_at_10_min": 0.96,
+    "recall_at_5_min": 1.0,
+    "ndcg_at_10_min": 0.96,
+    "exact_identifier_top1_rate_min": 1.0,
+    "semantic_queries_top5": [
+      "q13-cross-language-rrf",
+      "q14-cross-language-dense"
+    ],
+    "warm_api_p95_ms_max": 500.0,
+    "first_model_download_excluded": true,
+    "query_embedding_included": true
+  },
+  "default_behavior": {
+    "legacy_request_without_mode_when_vector_path_healthy": {
+      "mode_requested": "hybrid",
+      "mode_used": "hybrid",
+      "degraded": false
+    },
+    "explicit_bm25": {
+      "mode_requested": "bm25",
+      "mode_used": "bm25",
+      "degraded": false,
+      "must_not_require_embedding_inference": true
+    },
+    "default_indexing_attempts_vector_write": true,
+    "results_field_remains_backward_compatible": true
+  },
+  "fallback_and_upgrade_safety": {
+    "lexical_only_existing_corpus": "serve_bm25_with_explicit_hybrid_degradation",
+    "dense_disabled": "serve_bm25_with_explicit_hybrid_degradation",
+    "embedder_unavailable": "serve_bm25_with_explicit_hybrid_degradation",
+    "vector_index_unavailable": "serve_bm25_with_explicit_hybrid_degradation",
+    "vector_mapping_invalid": "serve_bm25_with_explicit_hybrid_degradation",
+    "current_hash_validation_unavailable": "serve_bm25_with_explicit_hybrid_degradation",
+    "lexical_backend_unavailable": "fail_request_503",
+    "stale_vector_candidate": "discard",
+    "vector_indexing_failure_after_lexical_success": "preserve_lexical_success"
+  },
+  "operator_opt_out": {
+    "SUPRACRAWL_SEARCH_MODE=bm25": "force lexical default",
+    "SUPRACRAWL_DENSE_ENABLED=false": "disable vector capability and degrade hybrid requests to bm25"
+  },
+  "hermes": {
+    "provider_contract_must_not_change": true,
+    "provider_request_continues_to_omit_mode": true,
+    "omitted_mode_now_uses_backend_hybrid_default_when_healthy": true,
+    "pinned_real_hermes_contract_required": true
+  },
+  "non_goals": [
+    "reranker",
+    "ann_or_hnsw",
+    "embedding_model_change",
+    "rrf_tuning",
+    "vector_schema_change",
+    "gpu_inference",
+    "cross_index_transactional_refresh",
+    "continuous_crawling"
+  ],
+  "certification": {
+    "ruff_required": true,
+    "full_python_suite_without_hybrid_extras_required": true,
+    "full_python_suite_with_hybrid_runtime_required": true,
+    "real_opensearch_required": true,
+    "real_default_api_benchmark_required": true,
+    "real_fallback_matrix_required": true,
+    "real_hermes_contract_required": true,
+    "all_prior_phase_workflows_required": true,
+    "phase3e_workflow_required": true,
+    "candidate_sha_gate_required": true,
+    "post_merge_main_sha_gate_required": true,
+    "clean_compose_teardown_required": true,
+    "known_blocker_or_high_defects_allowed": 0
+  }
+}
