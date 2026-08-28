@@ -207,6 +207,57 @@ async def test_current_hash_filter_discards_stale_dense_candidates(monkeypatch) 
 
 
 @pytest.mark.asyncio
+async def test_hash_validation_item_error_degrades_with_operation_context(monkeypatch) -> None:
+    settings = Settings(
+        opensearch_url="http://opensearch:9200",
+        opensearch_documents_index="docs-v1",
+        dense_enabled=True,
+    )
+    store = OpenSearchStore(settings)
+    service = SearchService(settings, store, _Embedder())
+    lexical = [_result("doc-a", 1)]
+    dense = [
+        {
+            **_result("doc-a", 1),
+            "metadata": {"document_id": "doc-a", "content_hash": "hash-a"},
+        }
+    ]
+
+    async def fake_search(_query: str, _limit: int) -> list[dict]:
+        return lexical
+
+    async def fake_dense(_query: str, _limit: int) -> list[dict]:
+        return dense
+
+    async def item_error_request(*_args, **_kwargs):
+        return httpx.Response(
+            200,
+            json={
+                "docs": [
+                    {
+                        "_id": "doc-a",
+                        "error": {
+                            "type": "cluster_block_exception",
+                            "reason": "index blocked by: [FORBIDDEN/5/index read-only]",
+                        },
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(store, "search", fake_search)
+    monkeypatch.setattr(service, "_dense_search", fake_dense)
+    monkeypatch.setattr(store, "_request_with_index_recovery", item_error_request)
+
+    execution = await service.search("query", 5, mode="hybrid")
+
+    assert execution.mode_used == "bm25"
+    assert execution.degraded is True
+    assert "current-content validation" in (execution.degradation_reason or "")
+    assert [_result_id(item) for item in execution.results] == ["doc-a"]
+
+
+@pytest.mark.asyncio
 async def test_hash_validation_transport_failure_keeps_operation_context(monkeypatch) -> None:
     settings = Settings(
         opensearch_url="http://opensearch:9200",
