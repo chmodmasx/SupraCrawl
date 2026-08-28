@@ -16,6 +16,8 @@ from supracrawl.search import OpenSearchStore, SearchBackendError, document_id
 def _settings() -> Settings:
     return Settings(
         opensearch_url="http://opensearch:9200",
+        search_mode="bm25",
+        dense_enabled=False,
         dense_model_name="test/e5-small",
         dense_dimension=3,
         opensearch_vector_chunks_index="test-vector-chunks-v1",
