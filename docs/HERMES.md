@@ -43,6 +43,28 @@ web:
 
 `web_search` queries only content already indexed by SupraCrawl. Populate the corpus through `/v1/index` or `/v1/crawl` before expecting search results.
 
+## Retrieval mode
+
+The Hermes provider deliberately does not add a SupraCrawl-specific retrieval-mode field to the Hermes search contract. It sends the existing query/limit payload and lets the backend apply its configured default.
+
+The promoted backend defaults are:
+
+```bash
+SUPRACRAWL_SEARCH_MODE=hybrid
+SUPRACRAWL_DENSE_ENABLED=true
+```
+
+When the local vector path is healthy, an unchanged Hermes `web_search` therefore uses BM25 plus local multilingual E5 retrieval and deterministic RRF fusion. If embeddings, vector search or current-content validation are unavailable, SupraCrawl degrades that request to BM25 internally. The Hermes result envelope remains unchanged.
+
+To keep lexical-only behavior as the deployment default:
+
+```bash
+SUPRACRAWL_SEARCH_MODE=bm25
+SUPRACRAWL_DENSE_ENABLED=false
+```
+
+The vector side is never allowed to mask failure of the lexical OpenSearch backbone; that remains a backend request failure.
+
 ## Use a different discovery provider
 
 A mixed configuration remains valid:
@@ -57,7 +79,7 @@ This is useful while building the local corpus or when broad whole-web discovery
 
 ## Contract details
 
-The provider is tested against a pinned real Hermes Agent `WebSearchProvider` ABC.
+The provider is tested against a pinned real Hermes Agent `WebSearchProvider` ABC. Phase 3E changes backend defaults, not the provider interface or Hermes envelope.
 
 Search returns Hermes' fixed search envelope:
 
