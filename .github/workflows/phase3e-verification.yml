@@ -132,6 +132,11 @@ jobs:
         run: |
           docker compose stop api
           docker compose up -d api
+          actual_dimension="$(docker compose exec -T api printenv SUPRACRAWL_DENSE_DIMENSION | tr -d '\r')"
+          if [ "$actual_dimension" != "385" ]; then
+            echo "dense dimension override was not propagated to API container: $actual_dimension" >&2
+            exit 1
+          fi
           for attempt in $(seq 1 45); do
             if curl -fsS http://127.0.0.1:8080/v1/health >/dev/null; then
               exit 0
