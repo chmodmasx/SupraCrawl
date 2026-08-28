@@ -31,12 +31,15 @@ async def test_search_endpoint_returns_ranked_results(monkeypatch) -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/v1/search",
-            json={"query": "supra crawl", "limit": 3},
+            json={"query": "supra crawl", "limit": 3, "mode": "bm25"},
         )
 
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
+    assert body["mode_requested"] == "bm25"
+    assert body["mode_used"] == "bm25"
+    assert body["degraded"] is False
     assert body["results"][0]["url"] == "https://example.com/result"
     assert body["results"][0]["position"] == 1
 
@@ -52,7 +55,7 @@ async def test_search_endpoint_returns_503_when_backend_is_unavailable(monkeypat
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/v1/search",
-            json={"query": "anything", "limit": 5},
+            json={"query": "anything", "limit": 5, "mode": "bm25"},
         )
 
     assert response.status_code == 503
