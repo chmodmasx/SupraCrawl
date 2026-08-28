@@ -55,6 +55,8 @@ jobs:
       - name: Run Phase 3C real vector benchmark
         env:
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+          SUPRACRAWL_DENSE_ENABLED: "false"
+          SUPRACRAWL_SEARCH_MODE: bm25
         run: python verification/verify_real_vector_retrieval.py
       - name: Container state
         if: always()
