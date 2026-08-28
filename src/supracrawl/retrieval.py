@@ -275,7 +275,13 @@ class SearchService:
 
         current_hashes: dict[str, str] = {}
         for document in documents:
-            if not isinstance(document, dict) or document.get("found") is not True:
+            if not isinstance(document, dict):
+                continue
+            if document.get("error") is not None:
+                raise SearchBackendError(
+                    "OpenSearch current-content validation failed for one or more documents"
+                )
+            if document.get("found") is not True:
                 continue
             document_id = document.get("_id")
             source = document.get("_source")
