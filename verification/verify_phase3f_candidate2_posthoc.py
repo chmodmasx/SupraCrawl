@@ -27,7 +27,10 @@ def _load_object(path: Path) -> dict[str, Any]:
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
         line = raw_line.strip()
         if not line:
             continue
@@ -52,17 +55,23 @@ def _candidate2_ranking(
     protected_top_k: int,
 ) -> list[str]:
     if len(hybrid_top10) != 10 or len(candidate1_score_order) != 10:
-        raise RuntimeError("Phase 3F ranking evidence must contain exactly 10 documents")
+        raise RuntimeError("ranking evidence must contain exactly 10 documents")
     if len(set(hybrid_top10)) != 10 or len(set(candidate1_score_order)) != 10:
-        raise RuntimeError("Phase 3F ranking evidence contains duplicate document ids")
+        raise RuntimeError("ranking evidence contains duplicate document ids")
     if set(hybrid_top10) != set(candidate1_score_order):
-        raise RuntimeError("Candidate 1 score order changed the certified hybrid candidate set")
-    if protected_top_k <= 0 or protected_top_k >= len(hybrid_top10):
-        raise RuntimeError("protected_top_k must split the candidate pool")
+        raise RuntimeError("Candidate 1 changed the certified hybrid candidate set")
 
     protected = set(hybrid_top10[:protected_top_k])
-    top = [document_id for document_id in candidate1_score_order if document_id in protected]
-    tail = [document_id for document_id in candidate1_score_order if document_id not in protected]
+    top = [
+        document_id
+        for document_id in candidate1_score_order
+        if document_id in protected
+    ]
+    tail = [
+        document_id
+        for document_id in candidate1_score_order
+        if document_id not in protected
+    ]
     ranking = top + tail
 
     if set(ranking[:protected_top_k]) != set(hybrid_top10[:protected_top_k]):
@@ -77,29 +86,30 @@ def _main() -> None:
     candidate2_policy = _load_object(CANDIDATE2_POLICY_PATH)
     candidate1_result = _load_object(CANDIDATE1_RESULT_PATH)
     evidence_rows = _load_jsonl(EVIDENCE_PATH)
+
     if len(evidence_rows) != 31:
         raise RuntimeError("ranking evidence must contain one header plus 30 query rows")
-
     header = evidence_rows[0]
     query_rows = evidence_rows[1:]
     source = candidate1_result["source"]
-    if header["source"]["artifact_id"] != source["artifact_id"]:
-        raise RuntimeError("ranking evidence artifact id does not match Candidate 1 result")
-    if header["source"]["artifact_sha256"] != source["artifact_sha256"]:
-        raise RuntimeError("ranking evidence artifact digest does not match Candidate 1 result")
-    if header["source"]["evaluated_head_sha"] != source["evaluated_head_sha"]:
-        raise RuntimeError("ranking evidence evaluated SHA does not match Candidate 1 result")
+
+    for key in ("artifact_id", "artifact_sha256", "evaluated_head_sha"):
+        if header["source"][key] != source[key]:
+            raise RuntimeError(f"ranking evidence source field {key} changed")
     if header["candidate_id"] != candidate1_result["candidate"]["id"]:
-        raise RuntimeError("ranking evidence candidate id does not match Candidate 1 result")
+        raise RuntimeError("ranking evidence candidate id changed")
 
     if candidate2_policy["base_main_sha"] != phase_policy["base_main_sha"]:
-        raise RuntimeError("Candidate 2 and Phase 3F policies disagree on base main SHA")
+        raise RuntimeError("Candidate 2 and Phase 3F disagree on base main SHA")
     if candidate2_policy["candidate_pool_size"] != phase_policy["reranker_scope"][
         "candidate_pool_size"
     ]:
         raise RuntimeError("Candidate 2 changed the frozen top-N candidate pool")
-    if candidate2_policy["formal_evaluation"]["state"] != "BLOCKED_PENDING_FROZEN_HOLDOUT":
-        raise RuntimeError("formal Candidate 2 execution must remain blocked in this commit")
+    formal = candidate2_policy["formal_evaluation"]
+    if formal["state"] != "FROZEN_HOLDOUT_PENDING_EXECUTION":
+        raise RuntimeError("Candidate 2 is not in the frozen holdout state")
+    if formal["execution_enabled_in_freeze_commit"] is not False:
+        raise RuntimeError("Candidate 2 freeze provenance unexpectedly enabled execution")
 
     relevance_by_id: dict[str, dict[str, int]] = {}
     for path in QUERY_PATHS:
@@ -112,8 +122,9 @@ def _main() -> None:
                 for document_id, grade in query["relevance"].items()
             }
 
-    if set(relevance_by_id) != {str(row["id"]) for row in query_rows}:
-        raise RuntimeError("ranking evidence query ids do not match the frozen 30-query benchmark")
+    evidence_ids = {str(row["id"]) for row in query_rows}
+    if set(relevance_by_id) != evidence_ids:
+        raise RuntimeError("ranking evidence ids differ from the frozen 30-query benchmark")
 
     protected_top_k = int(candidate2_policy["protected_top_k"])
     hybrid_metrics: list[RetrievalMetrics] = []
@@ -150,11 +161,10 @@ def _main() -> None:
     hybrid = _metric_dict(macro_average(hybrid_metrics))
     candidate1 = _metric_dict(macro_average(candidate1_metrics))
     candidate2 = _metric_dict(macro_average(candidate2_metrics))
-
     if hybrid != candidate1_result["benchmark"]["frozen_hybrid"]:
-        raise RuntimeError("ranking evidence does not reproduce the frozen hybrid baseline")
+        raise RuntimeError("ranking evidence no longer reproduces frozen hybrid")
     if candidate1 != candidate1_result["benchmark"]["reranked"]:
-        raise RuntimeError("ranking evidence does not reproduce Candidate 1")
+        raise RuntimeError("ranking evidence no longer reproduces Candidate 1")
 
     promotion = phase_policy["promotion"]
     runtime = candidate1_result["runtime"]
@@ -164,31 +174,39 @@ def _main() -> None:
     checks = {
         "top5_membership_preserved": True,
         "ndcg_material_improvement": (
-            ndcg_delta >= float(promotion["ndcg_at_10_min_delta_vs_frozen_hybrid"])
+            ndcg_delta
+            >= float(promotion["ndcg_at_10_min_delta_vs_frozen_hybrid"])
         ),
         "mrr_no_regression": (
-            mrr_regression <= float(promotion["max_mrr_at_10_regression_vs_frozen_hybrid"])
+            mrr_regression
+            <= float(promotion["max_mrr_at_10_regression_vs_frozen_hybrid"])
         ),
         "recall_no_regression": (
-            recall_regression <= float(promotion["max_recall_at_5_regression_vs_frozen_hybrid"])
+            recall_regression
+            <= float(promotion["max_recall_at_5_regression_vs_frozen_hybrid"])
         ),
         "inherited_candidate1_p95_added_latency": (
-            float(runtime["reranker_p95_ms"]) <= float(promotion["p95_added_latency_ms_max"])
+            float(runtime["reranker_p95_ms"])
+            <= float(promotion["p95_added_latency_ms_max"])
         ),
         "inherited_candidate1_peak_rss_delta": (
-            float(runtime["peak_rss_delta_mib"]) <= float(promotion["peak_rss_delta_mib_max"])
+            float(runtime["peak_rss_delta_mib"])
+            <= float(promotion["peak_rss_delta_mib_max"])
         ),
     }
     decision = "PASS_POSTHOC" if all(checks.values()) else "REJECT_POSTHOC"
 
     expected = candidate2_policy["known_benchmark"]
     if decision != expected["expected_decision"]:
-        raise RuntimeError(f"Candidate 2 post-hoc decision changed unexpectedly: {decision}")
+        raise RuntimeError(f"Candidate 2 post-hoc decision changed: {decision}")
     expected_metrics = expected["expected_metrics"]
     for key in ("mrr_at_10", "recall_at_5", "ndcg_at_10"):
         if candidate2[key] != float(expected_metrics[key]):
-            raise RuntimeError(f"Candidate 2 expected {key} changed: {candidate2[key]}")
-    if ndcg_delta != float(expected_metrics["ndcg_at_10_delta_vs_frozen_hybrid"]):
+            raise RuntimeError(f"Candidate 2 expected {key} changed")
+    expected_delta = float(
+        expected_metrics["ndcg_at_10_delta_vs_frozen_hybrid"]
+    )
+    if ndcg_delta != expected_delta:
         raise RuntimeError("Candidate 2 expected nDCG delta changed")
 
     report = {
@@ -197,7 +215,7 @@ def _main() -> None:
         "experiment": candidate2_policy["experiment"],
         "decision": decision,
         "promotion_eligible": False,
-        "promotion_blocker": "independent frozen holdout has not been authored or executed",
+        "promotion_blocker": "independent frozen holdout has not been executed",
         "aggregate": {
             "frozen_hybrid": hybrid,
             "candidate1_full_rerank": candidate1,

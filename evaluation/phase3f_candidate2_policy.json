@@ -46,12 +46,18 @@
     }
   },
   "formal_evaluation": {
-    "state": "BLOCKED_PENDING_FROZEN_HOLDOUT",
+    "state": "FROZEN_HOLDOUT_PENDING_EXECUTION",
     "holdout_protocol_path": "evaluation/phase3f_holdout_protocol.json",
+    "holdout_corpus_path": "evaluation/phase3f_holdout_corpus.jsonl",
+    "holdout_queries_path": "evaluation/phase3f_holdout_queries.jsonl",
+    "holdout_manifest_path": "evaluation/phase3f_holdout_manifest.json",
+    "holdout_freeze_verifier_path": "verification/verify_phase3f_holdout_freeze.py",
+    "holdout_executor_path": "verification/verify_phase3f_candidate2_holdout.py",
     "holdout_must_be_frozen_before_candidate2_model_execution": true,
     "thresholds_must_not_change_after_holdout_freeze": true,
     "known_benchmark_must_not_be_used_for_promotion": true,
-    "production_integration_allowed": false
+    "production_integration_allowed": false,
+    "execution_enabled_in_freeze_commit": false
   },
   "decision_states": [
     "INVALID",

@@ -26,6 +26,8 @@ jobs:
         run: ruff check .
       - name: Python regression suite
         run: pytest -q
+      - name: Verify independent holdout freeze without scoring it
+        run: python verification/verify_phase3f_holdout_freeze.py
       - name: Verify Candidate 2 post-hoc regression from frozen Candidate 1 evidence
         env:
           PHASE3F_CANDIDATE2_POSTHOC_OUTPUT: phase3f-candidate2-posthoc.json

@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "holdout": "phase3f-independent-holdout-v1",
+  "status": "FROZEN_PENDING_EXECUTION",
+  "base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd",
+  "source_code_sha": "ccec1947a25835f2d5ec7a5add8c60abeb962743",
+  "candidate_scoring_observed": false,
+  "execution_enabled": false,
+  "documents": 56,
+  "queries": 60,
+  "graded_multi_relevance_queries": 33,
+  "language_counts": {
+    "en": 38,
+    "es": 12,
+    "cross-language": 10
+  },
+  "family_counts": {
+    "lexical exact identifiers": 8,
+    "operational and configuration concepts": 11,
+    "semantic paraphrase": 8,
+    "security and failure-mode concepts": 12,
+    "multi-document graded relevance": 8,
+    "near-semantic distractors": 3,
+    "cross-language semantic retrieval": 10
+  },
+  "candidate_pool_size": 10,
+  "protected_top_k": 5,
+  "minimum_candidate_recall_at_10": 0.95,
+  "promotion_thresholds": {
+    "ndcg_at_10_min_delta_vs_frozen_hybrid": 0.02,
+    "max_mrr_at_10_regression_vs_frozen_hybrid": 0.0,
+    "max_recall_at_5_regression_vs_frozen_hybrid": 0.0,
+    "p95_added_latency_ms_max": 500,
+    "peak_rss_delta_mib_max": 2048,
+    "cpu_time_must_be_reported": true,
+    "memory_must_be_reported": true,
+    "quality_must_be_reported": true,
+    "latency_must_be_reported": true
+  },
+  "candidate_model": {
+    "model_repo": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd6",
+    "model_file": "onnx/model_quint8_avx2.onnx",
+    "model_file_sha256": "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+    "license": "apache-2.0",
+    "fastembed": "0.8.0",
+    "hosted_inference": false
+  },
+  "ranking_strategy": {
+    "name": "score_desc_within_frozen_top5_and_tail",
+    "steps": [
+      "Score the certified hybrid top-10 with the exact Candidate 1 cross-encoder.",
+      "Freeze first-stage membership of positions 1-5 and 6-10 before applying cross-encoder order.",
+      "Within each partition, order by cross-encoder score descending with stable first-stage position as the tie-breaker.",
+      "Concatenate the reranked top-5 partition followed by the reranked positions 6-10 partition."
+    ],
+    "invariants": [
+      "set(candidate2[:5]) == set(hybrid[:5])",
+      "set(candidate2[5:10]) == set(hybrid[5:10])",
+      "set(candidate2[:10]) == set(hybrid[:10])",
+      "Recall@5(candidate2) == Recall@5(hybrid) for every valid query"
+    ]
+  },
+  "files": {
+    "corpus": {
+      "path": "evaluation/phase3f_holdout_corpus.jsonl",
+      "sha256": "4806d44d4c1743a55a61733941ef57585d6722a80c69f5b639c20391f12bc595"
+    },
+    "queries": {
+      "path": "evaluation/phase3f_holdout_queries.jsonl",
+      "sha256": "517ae563dfa609b28adc4375fc472436ac57ef003383c496c7c49bc8866ed812"
+    },
+    "candidate2_policy": {
+      "path": "evaluation/phase3f_candidate2_policy.json",
+      "sha256": "78b6517453843eba1c108a3a68100952df57893325e33f611264c9afc2185f95"
+    },
+    "holdout_protocol": {
+      "path": "evaluation/phase3f_holdout_protocol.json",
+      "sha256": "1294cd4ea95e3e8d6a851d58342360e5380766d59c0b661c56b2a2223f3838bc"
+    },
+    "holdout_executor": {
+      "path": "verification/verify_phase3f_candidate2_holdout.py",
+      "sha256": "0aff06249c2f030d8b442e4ec7ee76837d836ebdc14bdf9b7c532e383095fe06"
+    }
+  },
+  "freeze_verifier_sha256": "c47c915c5336cbcf88a742fc8e93001650967736c3ca41869e1cb858f338e54a",
+  "source_basis": [
+    "src/supracrawl/models.py",
+    "src/supracrawl/config.py",
+    "src/supracrawl/security.py",
+    "src/supracrawl/fetcher.py",
+    "src/supracrawl/robots.py",
+    "src/supracrawl/extractor.py",
+    "src/supracrawl/chunking.py",
+    "src/supracrawl/crawler.py",
+    "src/supracrawl/search.py"
+  ],
+  "notes": [
+    "No Candidate 2 holdout scores or rankings were observed before this manifest was authored.",
+    "The known 30-query benchmark remains post-hoc only and is not promotion-eligible.",
+    "Any change to frozen data, qrels, model identity, ranking logic, thresholds, or holdout executor after observing results burns this holdout."
+  ]
+}
