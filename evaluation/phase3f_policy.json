@@ -1,0 +1,48 @@
+{
+  "phase": "3F",
+  "benchmark": "phase3f-reranker-screen-v1",
+  "base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd",
+  "purpose": "Evaluate whether top-N cross-encoder reranking materially improves the certified hybrid default before any production integration.",
+  "baseline": {
+    "retrieval_mode": "hybrid",
+    "candidate_pool_size": 10,
+    "minimum_queries": 30,
+    "warm_hybrid_api_p95_ms_max": 500,
+    "require_hybrid_mrr_gte_bm25": true,
+    "require_hybrid_recall_at_5_gte_bm25": true,
+    "require_hybrid_ndcg_gte_bm25": true,
+    "minimum_candidate_recall_at_10": 0.95,
+    "first_model_download_excluded": true
+  },
+  "reranker_scope": {
+    "evaluation_only_until_promotion": true,
+    "rerank_top_n_only": true,
+    "candidate_pool_size": 10,
+    "must_not_change_bm25_control": true,
+    "must_not_change_first_stage_retrieval": true,
+    "hosted_inference_allowed": false
+  },
+  "promotion": {
+    "ndcg_at_10_min_delta_vs_frozen_hybrid": 0.02,
+    "max_mrr_at_10_regression_vs_frozen_hybrid": 0.0,
+    "max_recall_at_5_regression_vs_frozen_hybrid": 0.0,
+    "p95_added_latency_ms_max": 500,
+    "peak_rss_delta_mib_max": 2048,
+    "cpu_time_must_be_reported": true,
+    "memory_must_be_reported": true,
+    "quality_must_be_reported": true,
+    "latency_must_be_reported": true
+  },
+  "candidate_selection": {
+    "previously_researched_model": "BAAI/bge-reranker-v2-m3",
+    "model_is_irrevocably_selected": false,
+    "requirements": [
+      "multilingual relevance scoring",
+      "local CPU inference",
+      "permissive production-compatible license",
+      "deterministic top-N scoring",
+      "bounded latency and memory overhead"
+    ]
+  },
+  "decision_rule": "A valid experiment may end in REJECT. Do not integrate a reranker unless every promotion check passes without weakening this preregistered policy after observing candidate results."
+}

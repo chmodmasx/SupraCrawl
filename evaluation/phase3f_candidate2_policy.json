@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "experiment": "phase3f-candidate2-top5-preserving-mmarco-minilmv2-v1",
+  "candidate_id": "candidate2-top5-preserving-mmarco-minilmv2-l12-qint8-avx2",
+  "base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd",
+  "parent_candidate_result": "evaluation/phase3f_candidate1_result.json",
+  "ranking_evidence": "evaluation/phase3f_candidate1_rankings.jsonl",
+  "promotion_policy_path": "evaluation/phase3f_policy.json",
+  "candidate_pool_size": 10,
+  "protected_top_k": 5,
+  "ranking_strategy": {
+    "name": "score_desc_within_frozen_top5_and_tail",
+    "steps": [
+      "Score the certified hybrid top-10 with the exact Candidate 1 cross-encoder.",
+      "Freeze first-stage membership of positions 1-5 and 6-10 before applying cross-encoder order.",
+      "Within each partition, order by cross-encoder score descending with stable first-stage position as the tie-breaker.",
+      "Concatenate the reranked top-5 partition followed by the reranked positions 6-10 partition."
+    ],
+    "invariants": [
+      "set(candidate2[:5]) == set(hybrid[:5])",
+      "set(candidate2[5:10]) == set(hybrid[5:10])",
+      "set(candidate2[:10]) == set(hybrid[:10])",
+      "Recall@5(candidate2) == Recall@5(hybrid) for every valid query"
+    ]
+  },
+  "model": {
+    "model_repo": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd6",
+    "model_file": "onnx/model_quint8_avx2.onnx",
+    "model_file_sha256": "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+    "license": "apache-2.0",
+    "fastembed": "0.8.0",
+    "hosted_inference": false
+  },
+  "known_benchmark": {
+    "use": "posthoc_regression_only",
+    "promotion_eligible": false,
+    "reason": "Candidate 2 was designed after Candidate 1 exposed the q16 Recall@5 failure, so the existing 30-query benchmark is no longer an independent promotion test.",
+    "expected_decision": "PASS_POSTHOC",
+    "expected_metrics": {
+      "mrr_at_10": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_10": 0.992965,
+      "ndcg_at_10_delta_vs_frozen_hybrid": 0.027173
+    }
+  },
+  "formal_evaluation": {
+    "state": "FROZEN_HOLDOUT_PENDING_EXECUTION",
+    "holdout_protocol_path": "evaluation/phase3f_holdout_protocol.json",
+    "holdout_corpus_path": "evaluation/phase3f_holdout_corpus.jsonl",
+    "holdout_queries_path": "evaluation/phase3f_holdout_queries.jsonl",
+    "holdout_manifest_path": "evaluation/phase3f_holdout_manifest.json",
+    "holdout_freeze_verifier_path": "verification/verify_phase3f_holdout_freeze.py",
+    "holdout_executor_path": "verification/verify_phase3f_candidate2_holdout.py",
+    "holdout_must_be_frozen_before_candidate2_model_execution": true,
+    "thresholds_must_not_change_after_holdout_freeze": true,
+    "known_benchmark_must_not_be_used_for_promotion": true,
+    "production_integration_allowed": false,
+    "execution_enabled_in_freeze_commit": false
+  },
+  "decision_states": [
+    "INVALID",
+    "REJECT_POSTHOC",
+    "PASS_POSTHOC",
+    "REJECT_HOLDOUT",
+    "PASS_HOLDOUT"
+  ]
+}
