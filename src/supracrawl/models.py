@@ -65,6 +65,10 @@ class SearchResponse(BaseModel):
     mode_used: SearchMode = "hybrid"
     degraded: bool = False
     degradation_reason: str | None = None
+    reranker_enabled: bool = False
+    reranker_used: bool = False
+    reranker_degraded: bool = False
+    reranker_degradation_reason: str | None = None
 
 
 class IndexRequest(BaseModel):

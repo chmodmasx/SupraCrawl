@@ -29,6 +29,7 @@ from .models import (
     SearchResponse,
     SearchResult,
 )
+from .reranking import ControlledRerankingSearchService, LocalCrossEncoderReranker
 from .retrieval import SearchService
 from .search import OpenSearchStore, SearchBackendError
 from .security import UnsafeUrlError
@@ -44,7 +45,13 @@ dense_embedder = DenseEmbedder(
     query_prefix=settings.dense_query_prefix,
     passage_prefix=settings.dense_passage_prefix,
 )
-search_service = SearchService(settings, search_store, dense_embedder)
+base_search_service = SearchService(settings, search_store, dense_embedder)
+reranker = LocalCrossEncoderReranker()
+search_service = ControlledRerankingSearchService(
+    settings,
+    base_search_service,
+    reranker,
+)
 indexer = Indexer(settings, extractor, search_store, embedder=dense_embedder)
 crawler = Crawler(fetcher, extractor, indexer)
 
@@ -189,4 +196,8 @@ async def search(request: SearchRequest) -> SearchResponse:
         mode_used=execution.mode_used,
         degraded=execution.degraded,
         degradation_reason=execution.degradation_reason,
+        reranker_enabled=execution.reranker_enabled,
+        reranker_used=execution.reranker_used,
+        reranker_degraded=execution.reranker_degraded,
+        reranker_degradation_reason=execution.reranker_degradation_reason,
     )
