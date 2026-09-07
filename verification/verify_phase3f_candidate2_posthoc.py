@@ -207,7 +207,10 @@ def _main() -> None:
             "recall_at_5_regression_vs_frozen_hybrid": recall_regression,
         },
         "runtime_evidence": {
-            "source": "inherited from Candidate 1 because model, model file, runtime, and top-10 scoring are unchanged",
+            "source": (
+                "inherited from Candidate 1 because model, model file, runtime, "
+                "and top-10 scoring are unchanged"
+            ),
             "reranker_p95_ms": runtime["reranker_p95_ms"],
             "peak_rss_delta_mib": runtime["peak_rss_delta_mib"],
             "candidate2_partition_transform_overhead_measured": False,
