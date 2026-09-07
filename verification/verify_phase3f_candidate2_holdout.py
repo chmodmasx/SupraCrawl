@@ -362,7 +362,11 @@ async def _run() -> None:
     rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
     print(rendered)
     if output_path:
-        Path(output_path).write_text(rendered + "\n", encoding="utf-8")
+        await asyncio.to_thread(
+            Path(output_path).write_text,
+            rendered + "\n",
+            encoding="utf-8",
+        )
     print(f"Phase 3F Candidate 2 independent holdout: {decision}")
 
 

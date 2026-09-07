@@ -81,7 +81,7 @@
     },
     "holdout_executor": {
       "path": "verification/verify_phase3f_candidate2_holdout.py",
-      "sha256": "0aff06249c2f030d8b442e4ec7ee76837d836ebdc14bdf9b7c532e383095fe06"
+      "sha256": "008008639ae37759661ebe99185326467e0eb3800fc84eaa326eeab51d5912b4"
     }
   },
   "freeze_verifier_sha256": "c47c915c5336cbcf88a742fc8e93001650967736c3ca41869e1cb858f338e54a",
