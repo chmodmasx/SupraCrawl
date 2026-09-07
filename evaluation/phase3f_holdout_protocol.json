@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "protocol": "phase3f-independent-holdout-v1",
+  "status": "PROTOCOL_FROZEN_DATA_NOT_YET_AUTHORED",
+  "purpose": "Define the independent holdout requirements before any formal Candidate 2 model execution.",
+  "minimum_queries": 60,
+  "requirements": {
+    "new_documents_only": true,
+    "new_query_ids_only": true,
+    "no_document_content_hash_overlap_with_known_benchmark": true,
+    "labels_frozen_before_candidate_scoring": true,
+    "graded_relevance_required": true,
+    "minimum_multi_relevance_queries": 15,
+    "languages": ["en", "es", "cross-language"],
+    "query_families": [
+      "lexical exact identifiers",
+      "semantic paraphrase",
+      "cross-language semantic retrieval",
+      "multi-document graded relevance",
+      "near-semantic distractors",
+      "operational and configuration concepts",
+      "security and failure-mode concepts"
+    ]
+  },
+  "freeze_artifacts": {
+    "required_files": [
+      "evaluation/phase3f_holdout_corpus.jsonl",
+      "evaluation/phase3f_holdout_queries.jsonl",
+      "evaluation/phase3f_holdout_manifest.json"
+    ],
+    "manifest_must_include_sha256_for_each_file": true,
+    "manifest_must_include_query_and_document_counts": true,
+    "manifest_must_reference_base_main_sha": "aa09dc9cfa2bac517219b28fcb0c3e49fa5591dd"
+  },
+  "execution_order": [
+    "Freeze corpus, queries, labels, manifest, Candidate 2 policy, and unchanged Phase 3F promotion thresholds in git.",
+    "Certify the freeze commit without running Candidate 2 on the holdout.",
+    "Enable holdout execution in a later enable-only commit that changes no holdout data, labels, thresholds, model identity, or ranking algorithm.",
+    "Measure holdout hybrid baseline and Candidate Recall@10 on the exact frozen holdout.",
+    "Run Candidate 2 on the same exact holdout and evaluate against the holdout baseline.",
+    "If quality-bearing data, labels, thresholds, model identity, or ranking logic changes after results are observed, burn the holdout and author a new one."
+  ],
+  "promotion": {
+    "inherit_thresholds_from": "evaluation/phase3f_policy.json",
+    "pass_state": "PASS_HOLDOUT",
+    "required_before_production_integration": true
+  }
+}

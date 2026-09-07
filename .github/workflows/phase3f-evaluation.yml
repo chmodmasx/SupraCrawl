@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  frozen-hybrid-baseline:
+  baseline-conformance-and-posthoc:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -26,6 +26,24 @@ jobs:
         run: ruff check .
       - name: Python regression suite
         run: pytest -q
+      - name: Verify Candidate 2 post-hoc regression from frozen Candidate 1 evidence
+        env:
+          PHASE3F_CANDIDATE2_POSTHOC_OUTPUT: phase3f-candidate2-posthoc.json
+        run: python verification/verify_phase3f_candidate2_posthoc.py
+      - name: Show Candidate 2 post-hoc artifact
+        if: always()
+        run: |
+          if [ -f phase3f-candidate2-posthoc.json ]; then
+            cat phase3f-candidate2-posthoc.json
+          fi
+      - name: Upload Candidate 2 post-hoc evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3f-candidate2-posthoc-regression
+          path: phase3f-candidate2-posthoc.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Build and start certified default stack
         run: docker compose up -d --build
       - name: Wait for API and OpenSearch
@@ -46,99 +64,24 @@ jobs:
         run: |
           test "$(docker compose exec -T api printenv SUPRACRAWL_SEARCH_MODE | tr -d '\r')" = "hybrid"
           test "$(docker compose exec -T api printenv SUPRACRAWL_DENSE_ENABLED | tr -d '\r')" = "true"
-      - name: Measure frozen hybrid baseline
+      - name: Measure hybrid baseline conformance
         env:
           SUPRACRAWL_API_URL: http://127.0.0.1:8080
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-          PHASE3F_BASELINE_OUTPUT: phase3f-baseline.json
+          PHASE3F_BASELINE_OUTPUT: phase3f-baseline-conformance.json
         run: python verification/verify_phase3f_baseline.py
-      - name: Show baseline artifact
+      - name: Show baseline conformance artifact
         if: always()
         run: |
-          if [ -f phase3f-baseline.json ]; then
-            cat phase3f-baseline.json
+          if [ -f phase3f-baseline-conformance.json ]; then
+            cat phase3f-baseline-conformance.json
           fi
-      - name: Upload baseline artifact
+      - name: Upload baseline conformance artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: phase3f-frozen-hybrid-baseline
-          path: phase3f-baseline.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: Cache candidate 1 model snapshot
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface/hub
-          key: phase3f-mmarco-minilmv2-1427fd6-6c251376
-      - name: Smoke candidate 1 model runtime
-        timeout-minutes: 12
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          python - <<'PY'
-          import json
-          import sys
-
-          sys.path.insert(0, "verification")
-          from verify_phase3f_candidate1 import (
-              CANDIDATE_POLICY_PATH,
-              _load_object,
-              _prepare_reranker,
-              _score_timed,
-          )
-
-          candidate = _load_object(CANDIDATE_POLICY_PATH)["candidate"]
-          print("PHASE3F_CANDIDATE1_SMOKE_STAGE=prepare", flush=True)
-          reranker, model_report = _prepare_reranker(candidate)
-          print(
-              "PHASE3F_CANDIDATE1_SMOKE_MODEL="
-              + json.dumps(model_report, sort_keys=True),
-              flush=True,
-          )
-          documents = [
-              f"Synthetic Phase 3F smoke document {index}. Multilingual retrieval reranking."
-              for index in range(10)
-          ]
-          scores, latency_ms, cpu_s = _score_timed(
-              reranker,
-              "multilingual retrieval reranking",
-              documents,
-          )
-          smoke = {
-              "score_count": len(scores),
-              "latency_ms": round(latency_ms, 3),
-              "cpu_s": round(cpu_s, 6),
-          }
-          print(
-              "PHASE3F_CANDIDATE1_SMOKE_INFERENCE="
-              + json.dumps(smoke, sort_keys=True),
-              flush=True,
-          )
-          PY
-      - name: Run preregistered candidate 1 reranker experiment
-        env:
-          SUPRACRAWL_API_URL: http://127.0.0.1:8080
-          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
-          PHASE3F_CANDIDATE1_OUTPUT: phase3f-candidate1.json
-          PYTHONUNBUFFERED: "1"
-        run: |
-          set -o pipefail
-          python verification/verify_phase3f_candidate1.py 2>&1 | tee phase3f-candidate1.log
-      - name: Show candidate 1 artifact
-        if: always()
-        run: |
-          if [ -f phase3f-candidate1.json ]; then
-            cat phase3f-candidate1.json
-          fi
-      - name: Upload candidate 1 evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase3f-candidate1-mmarco-minilmv2-qint8-avx2
-          path: |
-            phase3f-candidate1.json
-            phase3f-candidate1.log
+          name: phase3f-baseline-conformance
+          path: phase3f-baseline-conformance.json
           if-no-files-found: error
           retention-days: 14
       - name: Container state
