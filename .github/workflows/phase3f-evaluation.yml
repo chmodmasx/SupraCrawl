@@ -86,6 +86,33 @@ jobs:
           path: phase3f-baseline-conformance.json
           if-no-files-found: error
           retention-days: 14
+      - name: Cache frozen Candidate 2 model snapshot
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: phase3f-mmarco-minilmv2-1427fd6-6c251376
+      - name: Run frozen Candidate 2 independent holdout
+        timeout-minutes: 20
+        env:
+          SUPRACRAWL_API_URL: http://127.0.0.1:8080
+          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+          PHASE3F_CANDIDATE2_HOLDOUT_OUTPUT: phase3f-candidate2-holdout.json
+          PYTHONUNBUFFERED: "1"
+        run: python verification/verify_phase3f_candidate2_holdout.py
+      - name: Show Candidate 2 holdout artifact
+        if: always()
+        run: |
+          if [ -f phase3f-candidate2-holdout.json ]; then
+            cat phase3f-candidate2-holdout.json
+          fi
+      - name: Upload Candidate 2 holdout evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3f-candidate2-independent-holdout
+          path: phase3f-candidate2-holdout.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Container state
         if: always()
         run: docker compose ps -a
