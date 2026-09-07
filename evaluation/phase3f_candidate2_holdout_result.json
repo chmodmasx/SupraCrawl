@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "phase": "3F",
+  "experiment": "phase3f-candidate2-top5-preserving-mmarco-minilmv2-v1",
+  "source": {
+    "evaluated_head_sha": "ee0ac82a917b5138ed1e7e8850faae3afc78eb15",
+    "workflow_run_id": 34146251340,
+    "workflow_job_id": 101818812164,
+    "artifact_id": 10027849168,
+    "artifact_name": "phase3f-candidate2-independent-holdout",
+    "artifact_digest": "sha256:4cf9ed5b6604f1e4b75ed5a9c92aaea41717baf83a12e93ccc5afe42152c5806",
+    "artifact_payload_sha256": "42606895387b50cffc07ad54ea58e931930a0135381bb7363d55b53a3fa44f98",
+    "workflow_matrix": "9/9 success"
+  },
+  "decision": "PASS_HOLDOUT",
+  "promotion_eligible": true,
+  "benchmark": {
+    "documents": 56,
+    "queries": 60,
+    "candidate_pool_size": 10,
+    "protected_top_k": 5,
+    "holdout_hybrid": {
+      "mrr_at_10": 0.865694,
+      "recall_at_5": 0.875,
+      "ndcg_at_10": 0.857833
+    },
+    "candidate2_top5_preserving": {
+      "mrr_at_10": 0.944444,
+      "recall_at_5": 0.875,
+      "ndcg_at_10": 0.91327
+    },
+    "delta": {
+      "mrr_regression_vs_holdout_hybrid": -0.07875,
+      "recall_at_5_regression_vs_holdout_hybrid": 0.0,
+      "ndcg_at_10_delta_vs_holdout_hybrid": 0.055437,
+      "candidate_recall_at_10_mean": 0.966667
+    }
+  },
+  "runtime": {
+    "first_stage_hybrid_p95_ms": 144.366,
+    "reranker_warmup_ms": 189.878,
+    "reranker_p50_ms": 240.672,
+    "reranker_p95_ms": 290.612,
+    "partition_transform_p95_ms": 0.024766,
+    "added_p50_ms": 240.693,
+    "added_p95_ms": 290.633,
+    "end_to_end_p95_ms": 400.373,
+    "reranker_cpu_total_s": 55.022665,
+    "reranker_warmup_cpu_s": 0.722321,
+    "peak_rss_delta_mib": 469.656,
+    "rss_peak_process_mib": 1409.469
+  },
+  "model": {
+    "model_repo": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd6",
+    "model_file": "onnx/model_quint8_avx2.onnx",
+    "model_file_sha256": "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b",
+    "fastembed": "0.8.0"
+  },
+  "checks": {
+    "candidate_recall_at_10": true,
+    "top5_membership_preserved": true,
+    "ndcg_material_improvement": true,
+    "mrr_no_regression": true,
+    "recall_no_regression": true,
+    "p95_added_latency": true,
+    "peak_rss_delta": true
+  },
+  "diagnostics": {
+    "per_query_ndcg": {
+      "wins": 17,
+      "ties": 37,
+      "losses": 6,
+      "largest_regressions": [
+        {"id": "h3fq13", "delta": -0.358071, "family": "lexical exact identifiers"},
+        {"id": "h3fq32", "delta": -0.334685, "family": "multi-document graded relevance"},
+        {"id": "h3fq31", "delta": -0.031985, "family": "near-semantic distractors"}
+      ],
+      "largest_improvements": [
+        {"id": "h3fq20", "delta": 0.467707, "family": "security and failure-mode concepts"},
+        {"id": "h3fq52", "delta": 0.463999, "family": "cross-language semantic retrieval"},
+        {"id": "h3fq22", "delta": 0.45866, "family": "semantic paraphrase"}
+      ]
+    },
+    "first_stage_candidate_recall_at_10_below_one": [
+      {"id": "h3fq19", "recall_at_10": 0.5, "language": "en"},
+      {"id": "h3fq44", "recall_at_10": 0.5, "language": "es"},
+      {"id": "h3fq54", "recall_at_10": 0.5, "language": "cross-language"},
+      {"id": "h3fq57", "recall_at_10": 0.5, "language": "cross-language"}
+    ],
+    "language_ndcg": {
+      "en": {"queries": 38, "hybrid": 0.919891, "candidate2": 0.95866, "delta": 0.038768},
+      "es": {"queries": 12, "hybrid": 0.961164, "candidate2": 0.99011, "delta": 0.028946},
+      "cross-language": {"queries": 10, "hybrid": 0.498013, "candidate2": 0.648582, "delta": 0.150569}
+    },
+    "family_ndcg": {
+      "lexical exact identifiers": {"queries": 8, "hybrid": 0.99672, "candidate2": 0.951961, "delta": -0.044759},
+      "operational and configuration concepts": {"queries": 11, "hybrid": 0.933675, "candidate2": 0.99451, "delta": 0.060835},
+      "semantic paraphrase": {"queries": 8, "hybrid": 0.932742, "candidate2": 0.988939, "delta": 0.056197},
+      "security and failure-mode concepts": {"queries": 12, "hybrid": 0.897068, "candidate2": 0.956633, "delta": 0.059565},
+      "multi-document graded relevance": {"queries": 8, "hybrid": 0.922963, "candidate2": 0.924496, "delta": 0.001533},
+      "near-semantic distractors": {"queries": 3, "hybrid": 0.878401, "candidate2": 0.989338, "delta": 0.110938},
+      "cross-language semantic retrieval": {"queries": 10, "hybrid": 0.498013, "candidate2": 0.648582, "delta": 0.150569}
+    }
+  },
+  "decision_rule": "Candidate 2 passed every preregistered Phase 3F holdout gate. The result is promotion-eligible, but integration must preserve the frozen top-5 membership invariant and retain the documented per-query and lexical-identifier caveats."
+}
