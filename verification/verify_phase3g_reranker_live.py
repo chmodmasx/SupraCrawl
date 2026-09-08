@@ -24,7 +24,9 @@ from supracrawl.search import OpenSearchStore
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "evaluation" / "phase3d_policy.json"
 CORPUS_PATH = ROOT / "evaluation" / "corpus.jsonl"
+QUERIES_PATH = ROOT / "evaluation" / "queries.jsonl"
 EXACT_CORPUS_PATH = ROOT / "evaluation" / "phase3c_exact_corpus.jsonl"
+EXACT_QUERIES_PATH = ROOT / "evaluation" / "phase3c_exact_queries.jsonl"
 RERANKER_KEYS = {
     "reranker_model",
     "reranker_revision",
@@ -207,19 +209,20 @@ async def _run() -> None:
 
     policy = _load_policy()
     corpus = _load_jsonl(CORPUS_PATH) + _load_jsonl(EXACT_CORPUS_PATH)
+    queries = _load_jsonl(QUERIES_PATH) + _load_jsonl(EXACT_QUERIES_PATH)
+    id_to_url = _validate_fixture(corpus, queries, minimum_queries=30)
+
     spot_queries = policy["frozen_spot_queries"]
     entries = [*spot_queries["exact_identifier"], *spot_queries["semantic"]]
     if not entries:
         raise RuntimeError("Phase 3G live gate has no registered spot queries")
-    query_fixture = [
-        {
-            "id": entry["id"],
-            "query": entry["query"],
-            "relevant": {entry["target"]: 1},
-        }
-        for entry in entries
-    ]
-    _validate_fixture(corpus, query_fixture, minimum_queries=len(query_fixture))
+    for entry in entries:
+        query = entry.get("query")
+        target = entry.get("target")
+        if not isinstance(query, str) or not query.strip():
+            raise RuntimeError("Phase 3G spot query has no text")
+        if not isinstance(target, str) or target not in id_to_url:
+            raise RuntimeError("Phase 3G spot query references an unknown target")
 
     settings = Settings(
         opensearch_url=opensearch_url,
