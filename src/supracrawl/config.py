@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # Phase 3G controlled capability. The certified model identity and ranking
     # constants are intentionally not environment-configurable.
     reranker_enabled: bool = False
+    reranker_warmup_on_startup: bool = False
 
 
 @lru_cache

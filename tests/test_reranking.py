@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
 from typing import Any
 
 import pytest
 
 from supracrawl.config import Settings
 from supracrawl.reranking import (
+    RERANKER_MAX_CONCURRENCY,
     RERANKER_MODEL_REPO,
     RERANKER_PROTECTED_TOP_K,
     RERANKER_REVISION,
@@ -86,9 +90,28 @@ class _FakeCrossEncoder:
         return self.scores[: len(documents)]
 
 
+class _ConcurrencyCrossEncoder:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+
+    def rerank(self, _query: str, documents: list[str]) -> list[float]:
+        with self._lock:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        try:
+            time.sleep(0.05)
+            return [1.0] * len(documents)
+        finally:
+            with self._lock:
+                self.active -= 1
+
+
 def test_settings_keep_controlled_reranker_disabled_by_default() -> None:
     settings = Settings()
     assert settings.reranker_enabled is False
+    assert settings.reranker_warmup_on_startup is False
 
 
 def test_top5_preserving_order_keeps_partition_membership_and_stable_ties() -> None:
@@ -138,6 +161,62 @@ async def test_local_reranker_only_reorders_top10_and_preserves_rrf_scores() -> 
     assert len(model.calls) == 1
     assert model.calls[0][0] == "useful query"
     assert model.calls[0][1][0] == "Title doc-1\nDescription doc-1"
+
+
+@pytest.mark.asyncio
+async def test_warmup_is_singleflight() -> None:
+    runtime = LocalCrossEncoderReranker()
+    model = _FakeCrossEncoder([1.0])
+    calls = 0
+
+    def load_model():
+        nonlocal calls
+        calls += 1
+        time.sleep(0.02)
+        return model
+
+    runtime._load_model_sync = load_model  # type: ignore[method-assign]
+    await asyncio.gather(*(runtime.warmup() for _ in range(4)))
+
+    assert calls == 1
+    assert runtime._model is model
+
+
+@pytest.mark.asyncio
+async def test_failed_load_is_latched_until_process_restart() -> None:
+    runtime = LocalCrossEncoderReranker()
+    calls = 0
+
+    def fail_load():
+        nonlocal calls
+        calls += 1
+        raise RerankerBackendError("fixture load failure")
+
+    runtime._load_model_sync = fail_load  # type: ignore[method-assign]
+
+    with pytest.raises(RerankerBackendError, match="fixture load failure"):
+        await runtime.warmup()
+    with pytest.raises(RerankerBackendError, match="load disabled after failure"):
+        await runtime.warmup()
+
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_local_reranker_bounds_inference_concurrency() -> None:
+    runtime = LocalCrossEncoderReranker()
+    model = _ConcurrencyCrossEncoder()
+    runtime._model = model
+    results = [_result(f"doc-{index}", index) for index in range(1, 11)]
+
+    first, second = await asyncio.gather(
+        runtime.rerank("query one", results),
+        runtime.rerank("query two", results),
+    )
+
+    assert RERANKER_MAX_CONCURRENCY == 1
+    assert model.max_active == 1
+    assert len(first) == len(second) == 10
 
 
 @pytest.mark.asyncio

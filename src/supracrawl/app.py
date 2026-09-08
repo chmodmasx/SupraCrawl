@@ -58,9 +58,13 @@ crawler = Crawler(fetcher, extractor, indexer)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    yield
-    await cache.close()
-    await search_store.close()
+    try:
+        if settings.reranker_enabled and settings.reranker_warmup_on_startup:
+            await reranker.warmup()
+        yield
+    finally:
+        await cache.close()
+        await search_store.close()
 
 
 app = FastAPI(title="SupraCrawl", version=__version__, lifespan=lifespan)

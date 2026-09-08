@@ -22,6 +22,7 @@ RERANKER_MODEL_FILE_SHA256 = (
 RERANKER_FASTEMBED_VERSION = "0.8.0"
 RERANKER_CANDIDATE_POOL_SIZE = 10
 RERANKER_PROTECTED_TOP_K = 5
+RERANKER_MAX_CONCURRENCY = 1
 RERANKER_STRATEGY = "score_desc_within_frozen_top5_and_tail"
 RERANKER_REQUIRED_FILES = (
     "config.json",
@@ -96,23 +97,46 @@ def _top5_preserving_indices(scores: list[float], protected_top_k: int) -> list[
 
 
 class LocalCrossEncoderReranker:
-    """Lazy exact Candidate 2 runtime.
+    """Exact Candidate 2 runtime with bounded inference and latched load failure.
 
     Model identity and ranking constants are fixed because Phase 3F certified
-    exactly this candidate. Only activation is configurable.
+    exactly this candidate. A failed model load is not retried in the same
+    process; restarting the canary is the explicit retry boundary.
     """
 
     def __init__(self) -> None:
         self._model: _CrossEncoder | None = None
+        self._load_error: str | None = None
         self._load_lock = asyncio.Lock()
+        self._inference_slots = asyncio.Semaphore(RERANKER_MAX_CONCURRENCY)
+
+    async def warmup(self) -> None:
+        await self._ensure_model()
 
     async def _ensure_model(self) -> _CrossEncoder:
         if self._model is not None:
             return self._model
+        if self._load_error is not None:
+            raise RerankerBackendError(
+                f"reranker load disabled after failure: {self._load_error}"
+            )
+
         async with self._load_lock:
-            if self._model is None:
+            if self._model is not None:
+                return self._model
+            if self._load_error is not None:
+                raise RerankerBackendError(
+                    f"reranker load disabled after failure: {self._load_error}"
+                )
+            try:
                 self._model = await asyncio.to_thread(self._load_model_sync)
-        return self._model
+            except RerankerBackendError as exc:
+                self._load_error = str(exc)
+                raise
+            except Exception as exc:
+                self._load_error = f"unexpected reranker load failure: {exc}"
+                raise RerankerBackendError(self._load_error) from exc
+            return self._model
 
     @staticmethod
     def _sha256(path: Path) -> str:
@@ -214,7 +238,8 @@ class LocalCrossEncoderReranker:
         candidate_results = results[:candidate_count]
         documents = [_candidate_text(result) for result in candidate_results]
         model = await self._ensure_model()
-        scores = await asyncio.to_thread(self._score_sync, model, query, documents)
+        async with self._inference_slots:
+            scores = await asyncio.to_thread(self._score_sync, model, query, documents)
         order = _top5_preserving_indices(scores, RERANKER_PROTECTED_TOP_K)
 
         reranked: list[dict[str, Any]] = []
