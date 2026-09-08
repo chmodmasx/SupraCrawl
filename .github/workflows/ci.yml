@@ -48,6 +48,32 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build API image
         run: docker build -t supracrawl-api:ci .
+      - name: Build reranker canary image
+        run: docker build -f Dockerfile.reranker -t supracrawl-api-reranker:ci .
+      - name: Verify reranker canary runtime contract
+        run: |
+          docker run --rm -i supracrawl-api-reranker:ci python - <<'PY'
+          from importlib.metadata import version
+
+          from supracrawl.config import Settings
+          from supracrawl.reranking import (
+              RERANKER_FASTEMBED_VERSION,
+              RERANKER_MODEL_FILE,
+              RERANKER_MODEL_FILE_SHA256,
+              RERANKER_MODEL_REPO,
+              RERANKER_REVISION,
+          )
+
+          assert version("fastembed") == RERANKER_FASTEMBED_VERSION == "0.8.0"
+          assert version("huggingface-hub")
+          assert Settings().reranker_enabled is True
+          assert RERANKER_MODEL_REPO == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+          assert RERANKER_REVISION == "1427fd6"
+          assert RERANKER_MODEL_FILE == "onnx/model_quint8_avx2.onnx"
+          assert RERANKER_MODEL_FILE_SHA256 == (
+              "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b"
+          )
+          PY
       - name: Build extractor image
         run: docker build -t supracrawl-extractor:ci services/extractor-worker
       - name: API health smoke test
@@ -63,4 +89,18 @@ jobs:
             sleep 1
           done
           docker logs supracrawl-api-smoke
+          exit 1
+      - name: Reranker canary health smoke test
+        run: |
+          docker run -d --rm --name supracrawl-reranker-smoke \
+            -e SUPRACRAWL_REDIS_URL= \
+            -p 18081:8080 supracrawl-api-reranker:ci
+          trap 'docker stop supracrawl-reranker-smoke >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs supracrawl-reranker-smoke
           exit 1
