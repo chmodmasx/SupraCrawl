@@ -19,11 +19,11 @@ RUN useradd --create-home --uid 10001 supracrawl \
     && chown -R supracrawl:supracrawl /home/supracrawl
 USER supracrawl
 
-# Build-time admission gate: download the exact frozen snapshot, verify its
-# checksum through LocalCrossEncoderReranker, load it, and execute inference.
+# Build-time admission gate: cache and execute both production model paths.
+# The verifier checks dense embedding plus the exact frozen cross-encoder.
 RUN python scripts/verify_reranker_runtime.py
 
-# Runtime must use the snapshot admitted into this image, not the network.
+# Runtime must use the model artifacts admitted into this image, not the network.
 ENV HF_HUB_OFFLINE=1
 
 EXPOSE 8080

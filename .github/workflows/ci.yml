@@ -50,6 +50,10 @@ jobs:
         run: docker build -t supracrawl-api:ci .
       - name: Build and verify reranker canary image
         run: docker build -f Dockerfile.reranker -t supracrawl-api-reranker:ci .
+      - name: Verify canary models with network disabled
+        run: |
+          docker run --rm --network none supracrawl-api-reranker:ci \
+            python scripts/verify_reranker_runtime.py
       - name: Verify reranker canary runtime contract
         run: |
           docker run --rm -i supracrawl-api-reranker:ci python - <<'PY'
