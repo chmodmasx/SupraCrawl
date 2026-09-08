@@ -393,7 +393,11 @@ async def _run() -> None:
     print(rendered)
     output_path = os.environ.get("PHASE3G_RESOURCE_OUTPUT")
     if output_path:
-        Path(output_path).write_text(rendered + "\n", encoding="utf-8")
+        await asyncio.to_thread(
+            Path(output_path).write_text,
+            rendered + "\n",
+            encoding="utf-8",
+        )
     print(f"Phase 3G live resource gate: {decision}")
     if decision != "PASS_RESOURCE_GATE":
         raise RuntimeError("Phase 3G live resource gate rejected the canary")
