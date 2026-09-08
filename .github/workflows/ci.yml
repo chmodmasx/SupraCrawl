@@ -196,6 +196,28 @@ jobs:
           PHASE3G_FAULT_API_URL: http://127.0.0.1:18084
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
         run: python verification/verify_phase3g_reranker_live.py
+      - name: Run live reranker resource gate
+        env:
+          PHASE3G_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3G_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3G_BASELINE_CONTAINER: phase3g-baseline
+          PHASE3G_RERANKER_CONTAINER: phase3g-reranker
+          PHASE3G_RESOURCE_OUTPUT: phase3g-resource-report.json
+        run: python verification/verify_phase3g_resources.py
+      - name: Show live reranker resource evidence
+        if: always()
+        run: |
+          if [ -f phase3g-resource-report.json ]; then
+            cat phase3g-resource-report.json
+          fi
+      - name: Upload live reranker resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3g-live-resource-evidence
+          path: phase3g-resource-report.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Container state
         if: always()
         run: |
