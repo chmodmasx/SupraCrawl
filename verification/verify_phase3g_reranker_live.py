@@ -156,6 +156,39 @@ def _assert_enabled(baseline: dict[str, Any], enabled: dict[str, Any]) -> None:
         raise RuntimeError("live reranker first-stage provenance is incomplete")
 
 
+def _assert_fault_fallback(
+    baseline: dict[str, Any],
+    fault: dict[str, Any],
+    *,
+    expect_latched: bool,
+) -> None:
+    _assert_hybrid_common(fault)
+    if fault.get("reranker_enabled") is not True:
+        raise RuntimeError("fault canary lost reranker-enabled telemetry")
+    if fault.get("reranker_used") is not False:
+        raise RuntimeError("fault canary incorrectly reports reranker use")
+    if fault.get("reranker_degraded") is not True:
+        raise RuntimeError("fault canary did not report reranker degradation")
+    reason = fault.get("reranker_degradation_reason")
+    if not isinstance(reason, str) or not reason:
+        raise RuntimeError("fault canary did not report reranker failure reason")
+    if expect_latched and "load disabled after failure" not in reason:
+        raise RuntimeError("reranker load failure was not latched after the first request")
+
+    baseline_results = _results(baseline)
+    fault_results = _results(fault)
+    if _urls(fault) != _urls(baseline):
+        raise RuntimeError("reranker failure did not preserve first-stage hybrid ranking")
+    for baseline_result, fault_result in zip(baseline_results, fault_results, strict=True):
+        if fault_result.get("score") != baseline_result.get("score"):
+            raise RuntimeError("reranker failure changed first-stage hybrid score")
+        metadata = fault_result.get("metadata")
+        if not isinstance(metadata, dict):
+            raise RuntimeError("fault fallback result has no metadata")
+        if RERANKER_KEYS.intersection(metadata):
+            raise RuntimeError("fault fallback leaked reranker provenance into results")
+
+
 async def _post_search(
     client: httpx.AsyncClient,
     *,
@@ -202,6 +235,7 @@ async def _verify_bm25_bypass(client: httpx.AsyncClient, query: str) -> None:
 async def _run() -> None:
     baseline_url = os.environ.get("PHASE3G_BASELINE_API_URL", "http://127.0.0.1:18082")
     enabled_url = os.environ.get("PHASE3G_RERANKER_API_URL", "http://127.0.0.1:18083")
+    fault_url = os.environ.get("PHASE3G_FAULT_API_URL", "http://127.0.0.1:18084")
     opensearch_url = os.environ.get(
         "SUPRACRAWL_OPENSEARCH_URL",
         "http://127.0.0.1:9200",
@@ -248,7 +282,9 @@ async def _run() -> None:
         async with (
             httpx.AsyncClient(base_url=baseline_url, timeout=timeout) as baseline_client,
             httpx.AsyncClient(base_url=enabled_url, timeout=timeout) as enabled_client,
+            httpx.AsyncClient(base_url=fault_url, timeout=timeout) as fault_client,
         ):
+            first_baseline: dict[str, Any] | None = None
             for entry in entries:
                 query = entry["query"]
                 baseline = await _post_search(
@@ -257,6 +293,8 @@ async def _run() -> None:
                     limit=10,
                     mode="hybrid",
                 )
+                if first_baseline is None:
+                    first_baseline = baseline
                 enabled = await _post_search(
                     enabled_client,
                     query=query,
@@ -281,6 +319,26 @@ async def _run() -> None:
 
             await _verify_bm25_bypass(enabled_client, entries[0]["query"])
             print("phase3g_bm25_bypass=PASS")
+
+            if first_baseline is None:
+                raise RuntimeError("Phase 3G live gate did not capture a baseline response")
+            fault_query = entries[0]["query"]
+            first_fault = await _post_search(
+                fault_client,
+                query=fault_query,
+                limit=10,
+                mode="hybrid",
+            )
+            _assert_fault_fallback(first_baseline, first_fault, expect_latched=False)
+            second_fault = await _post_search(
+                fault_client,
+                query=fault_query,
+                limit=10,
+                mode="hybrid",
+            )
+            _assert_fault_fallback(first_baseline, second_fault, expect_latched=True)
+            print("phase3g_reranker_failure_fallback=PASS")
+            print("phase3g_reranker_load_failure_latched=PASS")
     finally:
         await store.close()
 

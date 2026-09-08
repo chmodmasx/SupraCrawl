@@ -138,7 +138,7 @@ jobs:
           done
           echo "Phase 3G OpenSearch did not become healthy" >&2
           exit 1
-      - name: Start paired canary APIs
+      - name: Start canary comparison APIs
         run: |
           docker run -d --name phase3g-baseline \
             --network phase3g-reranker_default \
@@ -160,24 +160,40 @@ jobs:
             -e SUPRACRAWL_RERANKER_ENABLED=true \
             -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=true \
             supracrawl-api-reranker:e2e
-      - name: Wait for paired canary APIs
+          docker run -d --name phase3g-reranker-fault \
+            --network phase3g-reranker_default \
+            -p 18084:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://opensearch:9200 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=true \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=false \
+            --entrypoint /bin/sh \
+            supracrawl-api-reranker:e2e \
+            -c 'rm -rf "$HF_HOME/hub/models--cross-encoder--mmarco-mMiniLMv2-L12-H384-v1"; \
+                exec uvicorn supracrawl.app:app --host 0.0.0.0 --port 8080'
+      - name: Wait for canary comparison APIs
         run: |
           for attempt in $(seq 1 90); do
             baseline_ok=0
             reranker_ok=0
+            fault_ok=0
             curl -fsS http://127.0.0.1:18082/v1/health >/dev/null && baseline_ok=1 || true
             curl -fsS http://127.0.0.1:18083/v1/health >/dev/null && reranker_ok=1 || true
-            if [ "$baseline_ok" -eq 1 ] && [ "$reranker_ok" -eq 1 ]; then
+            curl -fsS http://127.0.0.1:18084/v1/health >/dev/null && fault_ok=1 || true
+            if [ "$baseline_ok" -eq 1 ] && [ "$reranker_ok" -eq 1 ] && [ "$fault_ok" -eq 1 ]; then
               exit 0
             fi
             sleep 2
           done
-          echo "Phase 3G paired canary APIs did not become healthy" >&2
+          echo "Phase 3G canary comparison APIs did not become healthy" >&2
           exit 1
       - name: Run live reranker contract
         env:
           PHASE3G_BASELINE_API_URL: http://127.0.0.1:18082
           PHASE3G_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3G_FAULT_API_URL: http://127.0.0.1:18084
           SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
         run: python verification/verify_phase3g_reranker_live.py
       - name: Container state
@@ -190,9 +206,11 @@ jobs:
         run: |
           docker logs phase3g-baseline || true
           docker logs phase3g-reranker || true
+          docker logs phase3g-reranker-fault || true
           docker compose -p phase3g-reranker logs --no-color --tail=500 || true
       - name: Tear down
         if: always()
         run: |
-          docker rm -f phase3g-baseline phase3g-reranker >/dev/null 2>&1 || true
+          docker rm -f phase3g-baseline phase3g-reranker phase3g-reranker-fault \
+            >/dev/null 2>&1 || true
           docker compose -p phase3g-reranker down -v --remove-orphans
