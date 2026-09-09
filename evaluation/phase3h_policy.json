@@ -1,0 +1,40 @@
+{
+  "phase": "3H",
+  "benchmark": "phase3h-reranker-backpressure-v1",
+  "base_main_sha": "e494182bd348fbbb626e4d424fb0fef705f597c3",
+  "purpose": "Add opt-in admission control and per-request reranker timing telemetry without changing the certified ranking algorithm or Phase 3G canary behavior.",
+  "scope": {
+    "ranking_change_allowed": false,
+    "model_change_allowed": false,
+    "global_reranker_default_change_allowed": false,
+    "phase3g_canary_behavior_must_remain_reproducible": true
+  },
+  "admission_control": {
+    "enabled_by_default": false,
+    "reranker_max_concurrency": 1,
+    "admission_timeout_ms": 200.0,
+    "timeout_derivation": "Phase 3F added-latency budget is 500 ms and Phase 3G warm added p95 was 275.988 ms; residual 224.012 ms is rounded down to 200 ms.",
+    "timeout_behavior": "fail open to the certified first-stage hybrid ranking and report reranker degradation only",
+    "capacity_saturation_must_not_latch_model_failure": true
+  },
+  "observability": {
+    "response_fields": [
+      "reranker_queue_wait_ms",
+      "reranker_inference_ms"
+    ],
+    "capacity_reason_contains": "capacity saturated",
+    "timings_must_be_finite_and_nonnegative": true
+  },
+  "live_gate": {
+    "concurrency": 8,
+    "concurrent_api_p95_ms_max": 1000.0,
+    "p95_derivation": "Rounded below half of the Phase 3G observed reranker concurrent p95 of 2083.837 ms.",
+    "require_http_200_for_all_requests": true,
+    "require_at_least_one_reranked_request": true,
+    "require_at_least_one_capacity_fallback": true,
+    "capacity_fallback_must_equal_first_stage_hybrid": true,
+    "successful_rerank_must_equal_unsaturated_phase3g_canary": true,
+    "post_burst_request_must_rerank_successfully": true
+  },
+  "decision_rule": "Pass only if the historical Phase 3G gates remain unchanged and green, the opt-in Phase 3H canary bounds admission wait, preserves hybrid fallback ranking on saturation, exposes timing telemetry, recovers after the burst, and stays below the preregistered concurrent API p95 limit."
+}

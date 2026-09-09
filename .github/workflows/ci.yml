@@ -74,6 +74,7 @@ jobs:
           assert version("huggingface-hub")
           assert settings.reranker_enabled is True
           assert settings.reranker_warmup_on_startup is True
+          assert settings.reranker_backpressure_enabled is False
           assert os.environ["HF_HUB_OFFLINE"] == "1"
           assert RERANKER_MODEL_REPO == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
           assert RERANKER_REVISION == "1427fd6"
@@ -159,6 +160,7 @@ jobs:
             -e SUPRACRAWL_SEARCH_MODE=hybrid \
             -e SUPRACRAWL_RERANKER_ENABLED=true \
             -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=true \
+            -e SUPRACRAWL_RERANKER_BACKPRESSURE_ENABLED=false \
             supracrawl-api-reranker:e2e
           docker run -d --name phase3g-reranker-fault \
             --network phase3g-reranker_default \
@@ -169,25 +171,42 @@ jobs:
             -e SUPRACRAWL_SEARCH_MODE=hybrid \
             -e SUPRACRAWL_RERANKER_ENABLED=true \
             -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=false \
+            -e SUPRACRAWL_RERANKER_BACKPRESSURE_ENABLED=false \
             --entrypoint /bin/sh \
             supracrawl-api-reranker:e2e \
             -c 'rm -rf "$HF_HOME/hub/models--cross-encoder--mmarco-mMiniLMv2-L12-H384-v1"; \
                 exec uvicorn supracrawl.app:app --host 0.0.0.0 --port 8080'
+          docker run -d --name phase3h-reranker-backpressure \
+            --network phase3g-reranker_default \
+            -p 18085:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://opensearch:9200 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=true \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=true \
+            -e SUPRACRAWL_RERANKER_BACKPRESSURE_ENABLED=true \
+            supracrawl-api-reranker:e2e
       - name: Wait for canary comparison APIs
         run: |
           for attempt in $(seq 1 90); do
             baseline_ok=0
             reranker_ok=0
             fault_ok=0
+            backpressure_ok=0
             curl -fsS http://127.0.0.1:18082/v1/health >/dev/null && baseline_ok=1 || true
             curl -fsS http://127.0.0.1:18083/v1/health >/dev/null && reranker_ok=1 || true
             curl -fsS http://127.0.0.1:18084/v1/health >/dev/null && fault_ok=1 || true
-            if [ "$baseline_ok" -eq 1 ] && [ "$reranker_ok" -eq 1 ] && [ "$fault_ok" -eq 1 ]; then
+            curl -fsS http://127.0.0.1:18085/v1/health >/dev/null && backpressure_ok=1 || true
+            if [ "$baseline_ok" -eq 1 ] && \
+               [ "$reranker_ok" -eq 1 ] && \
+               [ "$fault_ok" -eq 1 ] && \
+               [ "$backpressure_ok" -eq 1 ]; then
               exit 0
             fi
             sleep 2
           done
-          echo "Phase 3G canary comparison APIs did not become healthy" >&2
+          echo "Phase 3G/3H canary comparison APIs did not become healthy" >&2
           exit 1
       - name: Run live reranker contract
         env:
@@ -218,6 +237,27 @@ jobs:
           path: phase3g-resource-report.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Run Phase 3H reranker backpressure gate
+        env:
+          PHASE3H_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3H_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3H_BACKPRESSURE_API_URL: http://127.0.0.1:18085
+          PHASE3H_BACKPRESSURE_OUTPUT: phase3h-backpressure-report.json
+        run: python verification/verify_phase3h_backpressure.py
+      - name: Show Phase 3H backpressure evidence
+        if: always()
+        run: |
+          if [ -f phase3h-backpressure-report.json ]; then
+            cat phase3h-backpressure-report.json
+          fi
+      - name: Upload Phase 3H backpressure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3h-reranker-backpressure-evidence
+          path: phase3h-backpressure-report.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Container state
         if: always()
         run: |
@@ -229,10 +269,15 @@ jobs:
           docker logs phase3g-baseline || true
           docker logs phase3g-reranker || true
           docker logs phase3g-reranker-fault || true
+          docker logs phase3h-reranker-backpressure || true
           docker compose -p phase3g-reranker logs --no-color --tail=500 || true
       - name: Tear down
         if: always()
         run: |
-          docker rm -f phase3g-baseline phase3g-reranker phase3g-reranker-fault \
+          docker rm -f \
+            phase3g-baseline \
+            phase3g-reranker \
+            phase3g-reranker-fault \
+            phase3h-reranker-backpressure \
             >/dev/null 2>&1 || true
           docker compose -p phase3g-reranker down -v --remove-orphans

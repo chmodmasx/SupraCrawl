@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     reranker_enabled: bool = False
     reranker_warmup_on_startup: bool = False
 
+    # Phase 3H operational capability. Backpressure is independently opt-in so
+    # the exact Phase 3G canary behavior remains reproducible.
+    reranker_backpressure_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

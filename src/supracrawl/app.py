@@ -46,7 +46,9 @@ dense_embedder = DenseEmbedder(
     passage_prefix=settings.dense_passage_prefix,
 )
 base_search_service = SearchService(settings, search_store, dense_embedder)
-reranker = LocalCrossEncoderReranker()
+reranker = LocalCrossEncoderReranker(
+    backpressure_enabled=settings.reranker_backpressure_enabled,
+)
 search_service = ControlledRerankingSearchService(
     settings,
     base_search_service,
@@ -204,4 +206,6 @@ async def search(request: SearchRequest) -> SearchResponse:
         reranker_used=execution.reranker_used,
         reranker_degraded=execution.reranker_degraded,
         reranker_degradation_reason=execution.reranker_degradation_reason,
+        reranker_queue_wait_ms=execution.reranker_queue_wait_ms,
+        reranker_inference_ms=execution.reranker_inference_ms,
     )
