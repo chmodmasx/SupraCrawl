@@ -187,6 +187,17 @@ jobs:
             -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=true \
             -e SUPRACRAWL_RERANKER_BACKPRESSURE_ENABLED=true \
             supracrawl-api-reranker:e2e
+          docker run -d --name phase3j-opensearch-fault \
+            --network phase3g-reranker_default \
+            -p 18086:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://127.0.0.1:1 \
+            -e SUPRACRAWL_OPENSEARCH_TIMEOUT_S=1 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=false \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=false \
+            supracrawl-api-reranker:e2e
       - name: Wait for canary comparison APIs
         run: |
           for attempt in $(seq 1 90); do
@@ -194,19 +205,22 @@ jobs:
             reranker_ok=0
             fault_ok=0
             backpressure_ok=0
+            opensearch_fault_ok=0
             curl -fsS http://127.0.0.1:18082/v1/health >/dev/null && baseline_ok=1 || true
             curl -fsS http://127.0.0.1:18083/v1/health >/dev/null && reranker_ok=1 || true
             curl -fsS http://127.0.0.1:18084/v1/health >/dev/null && fault_ok=1 || true
             curl -fsS http://127.0.0.1:18085/v1/health >/dev/null && backpressure_ok=1 || true
+            curl -fsS http://127.0.0.1:18086/v1/health >/dev/null && opensearch_fault_ok=1 || true
             if [ "$baseline_ok" -eq 1 ] && \
                [ "$reranker_ok" -eq 1 ] && \
                [ "$fault_ok" -eq 1 ] && \
-               [ "$backpressure_ok" -eq 1 ]; then
+               [ "$backpressure_ok" -eq 1 ] && \
+               [ "$opensearch_fault_ok" -eq 1 ]; then
               exit 0
             fi
             sleep 2
           done
-          echo "Phase 3G/3H canary comparison APIs did not become healthy" >&2
+          echo "Phase 3G/3H/3J canary comparison APIs did not become healthy" >&2
           exit 1
       - name: Run live reranker contract
         env:
@@ -279,6 +293,29 @@ jobs:
           path: phase3i-metrics-report.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Run Phase 3J readiness gate
+        env:
+          PHASE3J_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3J_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3J_RERANKER_FAULT_API_URL: http://127.0.0.1:18084
+          PHASE3J_BACKPRESSURE_API_URL: http://127.0.0.1:18085
+          PHASE3J_OPENSEARCH_FAULT_API_URL: http://127.0.0.1:18086
+          PHASE3J_READINESS_OUTPUT: phase3j-readiness-report.json
+        run: python verification/verify_phase3j_readiness.py
+      - name: Show Phase 3J readiness evidence
+        if: always()
+        run: |
+          if [ -f phase3j-readiness-report.json ]; then
+            cat phase3j-readiness-report.json
+          fi
+      - name: Upload Phase 3J readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3j-readiness-evidence
+          path: phase3j-readiness-report.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Container state
         if: always()
         run: |
@@ -291,6 +328,7 @@ jobs:
           docker logs phase3g-reranker || true
           docker logs phase3g-reranker-fault || true
           docker logs phase3h-reranker-backpressure || true
+          docker logs phase3j-opensearch-fault || true
           docker compose -p phase3g-reranker logs --no-color --tail=500 || true
       - name: Tear down
         if: always()
@@ -300,5 +338,6 @@ jobs:
             phase3g-reranker \
             phase3g-reranker-fault \
             phase3h-reranker-backpressure \
+            phase3j-opensearch-fault \
             >/dev/null 2>&1 || true
           docker compose -p phase3g-reranker down -v --remove-orphans

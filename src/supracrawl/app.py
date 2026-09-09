@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import ValidationError
 
 from . import __version__
@@ -26,11 +26,13 @@ from .models import (
     IndexRequest,
     IndexResponse,
     MetricsResponse,
+    ReadinessResponse,
     SearchRequest,
     SearchResponse,
     SearchResult,
 )
 from .observability import SearchMetrics
+from .readiness import READINESS_SCHEMA_VERSION, ReadinessChecker
 from .reranking import ControlledRerankingSearchService, LocalCrossEncoderReranker
 from .retrieval import SearchService
 from .search import OpenSearchStore, SearchBackendError
@@ -57,6 +59,7 @@ search_service = ControlledRerankingSearchService(
     reranker,
 )
 search_metrics = SearchMetrics()
+readiness_checker = ReadinessChecker(settings, search_store, dense_embedder)
 indexer = Indexer(settings, extractor, search_store, embedder=dense_embedder)
 crawler = Crawler(fetcher, extractor, indexer)
 
@@ -78,6 +81,31 @@ app = FastAPI(title="SupraCrawl", version=__version__, lifespan=lifespan)
 @app.get("/v1/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(version=__version__)
+
+
+@app.get(
+    "/v1/ready",
+    response_model=ReadinessResponse,
+    responses={503: {"model": ReadinessResponse}},
+)
+async def ready(response: Response) -> ReadinessResponse:
+    state = await readiness_checker.check()
+    if not state.ready:
+        response.status_code = 503
+    return ReadinessResponse(
+        schema_version=READINESS_SCHEMA_VERSION,
+        status="ready" if state.ready else "not_ready",
+        version=__version__,
+        search_mode=settings.search_mode,
+        dense_enabled=settings.dense_enabled,
+        reranker_enabled=settings.reranker_enabled,
+        reranker_warmup_on_startup=settings.reranker_warmup_on_startup,
+        reranker_backpressure_enabled=settings.reranker_backpressure_enabled,
+        components={
+            name: {"status": component.status, "reason": component.reason}
+            for name, component in state.components.items()
+        },
+    )
 
 
 @app.get("/v1/metrics", response_model=MetricsResponse)

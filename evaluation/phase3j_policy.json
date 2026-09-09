@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "phase": "3J",
+  "gate": "phase3j-readiness-contract-v1",
+  "base_certified_sha": "200bac77659b2cfae828585643fb7bfe778d0f4d",
+  "scope": "liveness-readiness separation without ranking changes",
+  "acceptance": {
+    "healthy_health_status": 200,
+    "healthy_ready_status": 200,
+    "healthy_ready_body_status": "ready",
+    "reranker_without_startup_warmup_health_status": 200,
+    "reranker_without_startup_warmup_ready_status": 503,
+    "reranker_without_startup_warmup_reason": "reranker_startup_warmup_required",
+    "opensearch_fault_health_status": 200,
+    "opensearch_fault_ready_status": 503,
+    "opensearch_fault_reason": "opensearch_unavailable_or_indices_invalid"
+  },
+  "constraints": {
+    "health_contract_unchanged": true,
+    "reranker_default_unchanged": true,
+    "reranker_readiness_must_not_load_model": true,
+    "ranking_behavior_unchanged": true,
+    "new_performance_thresholds": false
+  }
+}

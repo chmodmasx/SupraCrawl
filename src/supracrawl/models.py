@@ -95,6 +95,24 @@ class MetricsResponse(BaseModel):
     reranker_inference_ms_max: float = Field(ge=0.0)
 
 
+class ReadinessComponent(BaseModel):
+    status: Literal["ready", "not_ready", "disabled", "not_required"]
+    reason: str | None = None
+
+
+class ReadinessResponse(BaseModel):
+    schema_version: Literal[1] = 1
+    status: Literal["ready", "not_ready"]
+    service: str = "SupraCrawl"
+    version: str
+    search_mode: SearchMode
+    dense_enabled: bool
+    reranker_enabled: bool
+    reranker_warmup_on_startup: bool
+    reranker_backpressure_enabled: bool
+    components: dict[str, ReadinessComponent]
+
+
 class IndexRequest(BaseModel):
     urls: list[HttpUrl] = Field(min_length=1, max_length=50)
 
