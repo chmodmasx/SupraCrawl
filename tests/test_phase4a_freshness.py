@@ -10,10 +10,10 @@ from pydantic import ValidationError
 
 import supracrawl.app as app_module
 from supracrawl.config import Settings
-from supracrawl.crawler import CrawlOutcome, Crawler
+from supracrawl.crawler import Crawler, CrawlOutcome
 from supracrawl.extractor import Extraction
 from supracrawl.fetcher import FetchResult
-from supracrawl.indexer import FreshIndexHit, IndexOutcome, Indexer
+from supracrawl.indexer import FreshIndexHit, Indexer, IndexOutcome
 from supracrawl.models import CrawlRequest
 from supracrawl.search import SearchBackendError
 
