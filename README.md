@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure for that canary, and Phase 3I adds process-local operational metrics without changing ranking behavior.
 
 ## Design rules
 
@@ -66,6 +66,8 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Validate dense candidates against the current document `content_hash` before fusion.
 - Introduce rerankers only after a benchmark proves an additional gain.
 - Keep reranker rollout isolated from the certified default retrieval path and fail back to first-stage hybrid.
+- Bound reranker queueing explicitly when backpressure is enabled rather than allowing unbounded request buildup.
+- Keep operational metrics read-only and independent from ranking decisions.
 
 ## API
 
@@ -103,7 +105,17 @@ A request that omits `mode` uses the configured default. The promoted default is
 
 Hybrid responses report `mode_requested`, `mode_used`, `degraded`, and `degradation_reason`. If the vector path is disabled or unavailable, the request falls back to BM25; failure of the lexical backbone remains a request failure.
 
-When the optional Phase 3G reranker is enabled, responses additionally report `reranker_enabled`, `reranker_used`, `reranker_degraded`, and `reranker_degradation_reason`. Explicit BM25 requests bypass reranking. A reranker load or inference failure preserves the certified first-stage hybrid ranking and is reported separately from retrieval degradation.
+When the optional Phase 3G reranker is enabled, responses additionally report `reranker_enabled`, `reranker_used`, `reranker_degraded`, `reranker_degradation_reason`, `reranker_queue_wait_ms`, and `reranker_inference_ms`. Explicit BM25 requests bypass reranking. A reranker load or inference failure preserves the certified first-stage hybrid ranking and is reported separately from retrieval degradation. With Phase 3H backpressure enabled, capacity saturation also fails open to the first-stage hybrid ranking instead of allowing unbounded queue growth.
+
+### Metrics
+
+```text
+GET /v1/metrics
+```
+
+Returns schema-versioned, process-local operational counters for completed search work. The endpoint reports request/success/backend-error counts, retrieval degradation, reranker enabled/used/degraded counts, capacity versus other reranker degradation, and queue/inference observation counts with sum/max timing aggregates. It also reports whether reranking and backpressure are enabled in that process.
+
+Metrics are read-only and reset only when the serving process restarts. There is no remote reset operation and no external metrics dependency in the Phase 3I capability.
 
 ## Retrieval defaults
 
@@ -111,6 +123,7 @@ When the optional Phase 3G reranker is enabled, responses additionally report `r
 SUPRACRAWL_SEARCH_MODE=hybrid
 SUPRACRAWL_DENSE_ENABLED=true
 SUPRACRAWL_RERANKER_ENABLED=false
+SUPRACRAWL_RERANKER_BACKPRESSURE_ENABLED=false
 ```
 
 Operator opt-out:
@@ -145,16 +158,20 @@ The frozen reranker identity is:
 - protected set: first-stage top-5 membership
 - strategy: `score_desc_within_frozen_top5_and_tail`
 
-The current Phase 3G candidate has live-gated model warmup, offline model verification, exact provenance, top-10/top-5 invariants, stable ranking, BM25 bypass, real failure fallback, and a latched model-load failure boundary.
+The certified Phase 3G capability includes live-gated model warmup, offline model verification, exact provenance, top-10/top-5 invariants, stable ranking, BM25 bypass, real failure fallback, and a latched model-load failure boundary.
 
-The preregistered live resource gate passed with:
+Its preregistered live resource gate originally passed with:
 
 - warm added p95: `275.988 ms` against a `500 ms` maximum;
 - peak RSS delta: `407.742 MiB` against a `2048 MiB` maximum;
 - 24 concurrent requests in 3 rounds of width 8 with no failures/degradations and deterministic ranking;
 - incremental CPU reported as `41.07 s` for the measured workload.
 
-The same load test observed reranker concurrent p95 of `2083.837 ms` versus `392.841 ms` for the baseline. No concurrent-latency threshold was preregistered, so this is not treated as a failed historical gate, but it is a rollout constraint: the reranker remains **default OFF / canary only** rather than a global default.
+The same Phase 3G load test observed reranker concurrent p95 of `2083.837 ms` versus `392.841 ms` for the baseline. No concurrent-latency threshold was preregistered, so this is not treated as a failed historical gate, but it is a rollout constraint: the reranker remains **default OFF / canary only** rather than a global default.
+
+Phase 3H adds an independently opt-in admission timeout of `200 ms` while keeping inference concurrency fixed at 1. Its certified 8-request burst produced `625.329 ms` concurrent API p95 against a preregistered `1000 ms` maximum, with 6 capacity fallbacks, 2 successful reranks, and successful post-burst recovery. Saturation is not latched as a model failure.
+
+Phase 3I adds process-local operational accounting. Its first certified code candidate recorded a controlled 8-request backpressure burst as 7 capacity fallbacks and 1 successful rerank with zero other degradation, 8 queue observations and 1 inference observation. The same candidate reran the inherited Phase 3G resource gate successfully with `293.507 ms` warm added p95 and `404.379 MiB` peak RSS delta, and reran the Phase 3H gate at `610.865 ms` concurrent API p95.
 
 ## Local stack
 
@@ -169,7 +186,7 @@ The Compose stack includes:
 - Redis extraction cache
 - OpenSearch 3.8.0
 
-The standard Compose API does not bundle or enable the optional Phase 3G reranker runtime.
+The standard Compose API does not bundle or enable the optional reranker runtime. The dedicated canary image is required for the Phase 3G/3H reranker path.
 
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
@@ -227,17 +244,23 @@ The already-certified hybrid path was promoted to the global default after omitt
 
 A preregistered cross-encoder experiment selected the exact top-5-preserving Candidate 2 after the independent frozen holdout passed the quality, Recall@5, latency and memory promotion checks. The holdout also recorded a lexical exact-identifier family regression, so the result does not justify unconditional reranker rollout.
 
-### Phase 3G — Controlled reranker production capability — current gate
+### Phase 3G — Controlled reranker production capability — certified
 
-The branch candidate packages the exact frozen reranker in a dedicated canary image, keeps the standard image/default path unchanged, performs startup warmup, bounds inference concurrency, falls back to certified hybrid on failure, latches load failure until process restart, exposes independent reranker telemetry, and has passed live success/failure/resource gates on its exact candidate SHA.
+The exact frozen reranker is packaged in a dedicated canary image while the standard image/default path remains unchanged. Startup warmup, offline model availability, single-flight loading, bounded inference concurrency, exact ranking/provenance invariants, BM25 bypass, failure fallback, load-failure latching, live E2E and resource gates are certified. Global reranker promotion remains out of scope; default OFF / canary is the intended rollout state.
 
-Phase 3G is not complete until the final branch candidate and the resulting merged `main` SHA both pass the complete workflow matrix. Global reranker promotion remains out of scope; default OFF / canary is the intended rollout state.
+### Phase 3H — Reranker admission backpressure — certified
+
+An independently opt-in `200 ms` admission timeout prevents an 8-request burst from building an unbounded reranker queue. Capacity saturation fails open to the certified hybrid ranking, remains distinct from model failure, and recovers after the burst. The preregistered live p95 gate passed at `625.329 ms` against `1000 ms` while historical Phase 3G behavior remained reproducible with backpressure disabled.
+
+### Phase 3I — Operational search metrics — current gate
+
+A read-only `/v1/metrics` endpoint exposes process-local search/reranker/backpressure counters plus queue/inference timing aggregates without new runtime dependencies or ranking changes. The first exact code candidate passed the live metrics accounting gate and the inherited Phase 3G resource and Phase 3H latency gates. Phase 3I remains open until this documentation-complete branch SHA and the resulting merged `main` SHA both pass the complete workflow matrix.
 
 ### Later measured work
 
 - continuous crawling and refresh policies;
 - per-domain extraction rules;
-- observability and backpressure;
+- metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
 - scale-specific ANN/GPU work only when corpus/load measurements require it;
 - any new ranking behavior only with a newly preregistered evaluation and fresh independent validation data.
