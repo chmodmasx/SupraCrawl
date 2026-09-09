@@ -25,10 +25,12 @@ from .models import (
     IndexItem,
     IndexRequest,
     IndexResponse,
+    MetricsResponse,
     SearchRequest,
     SearchResponse,
     SearchResult,
 )
+from .observability import SearchMetrics
 from .reranking import ControlledRerankingSearchService, LocalCrossEncoderReranker
 from .retrieval import SearchService
 from .search import OpenSearchStore, SearchBackendError
@@ -54,6 +56,7 @@ search_service = ControlledRerankingSearchService(
     base_search_service,
     reranker,
 )
+search_metrics = SearchMetrics()
 indexer = Indexer(settings, extractor, search_store, embedder=dense_embedder)
 crawler = Crawler(fetcher, extractor, indexer)
 
@@ -75,6 +78,15 @@ app = FastAPI(title="SupraCrawl", version=__version__, lifespan=lifespan)
 @app.get("/v1/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(version=__version__)
+
+
+@app.get("/v1/metrics", response_model=MetricsResponse)
+async def metrics() -> MetricsResponse:
+    return MetricsResponse(
+        **search_metrics.snapshot(),
+        reranker_enabled=settings.reranker_enabled,
+        reranker_backpressure_enabled=settings.reranker_backpressure_enabled,
+    )
 
 
 @app.post("/v1/extract", response_model=ExtractResponse)
@@ -186,6 +198,7 @@ async def crawl(request: CrawlRequest) -> CrawlResponse:
 
 @app.post("/v1/search", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
+    search_metrics.record_request()
     try:
         execution = await search_service.search(
             request.query,
@@ -193,10 +206,11 @@ async def search(request: SearchRequest) -> SearchResponse:
             mode=request.mode,
         )
     except SearchBackendError as exc:
+        search_metrics.record_backend_error()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     results = [SearchResult.model_validate(result) for result in execution.results]
-    return SearchResponse(
+    response = SearchResponse(
         results=results,
         mode_requested=execution.mode_requested,
         mode_used=execution.mode_used,
@@ -209,3 +223,5 @@ async def search(request: SearchRequest) -> SearchResponse:
         reranker_queue_wait_ms=execution.reranker_queue_wait_ms,
         reranker_inference_ms=execution.reranker_inference_ms,
     )
+    search_metrics.record_execution(execution)
+    return response

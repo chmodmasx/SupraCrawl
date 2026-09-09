@@ -258,6 +258,27 @@ jobs:
           path: phase3h-backpressure-report.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Run Phase 3I operational metrics gate
+        env:
+          PHASE3I_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3I_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3I_BACKPRESSURE_API_URL: http://127.0.0.1:18085
+          PHASE3I_METRICS_OUTPUT: phase3i-metrics-report.json
+        run: python verification/verify_phase3i_metrics.py
+      - name: Show Phase 3I operational metrics evidence
+        if: always()
+        run: |
+          if [ -f phase3i-metrics-report.json ]; then
+            cat phase3i-metrics-report.json
+          fi
+      - name: Upload Phase 3I operational metrics evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3i-operational-metrics-evidence
+          path: phase3i-metrics-report.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Container state
         if: always()
         run: |

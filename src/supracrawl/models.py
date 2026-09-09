@@ -73,6 +73,28 @@ class SearchResponse(BaseModel):
     reranker_inference_ms: float | None = None
 
 
+class MetricsResponse(BaseModel):
+    schema_version: Literal[1] = 1
+    scope: Literal["process"] = "process"
+    reranker_enabled: bool
+    reranker_backpressure_enabled: bool
+    search_requests_total: int = Field(ge=0)
+    search_success_total: int = Field(ge=0)
+    search_backend_errors_total: int = Field(ge=0)
+    retrieval_degraded_total: int = Field(ge=0)
+    reranker_enabled_requests_total: int = Field(ge=0)
+    reranker_used_total: int = Field(ge=0)
+    reranker_degraded_total: int = Field(ge=0)
+    reranker_capacity_fallback_total: int = Field(ge=0)
+    reranker_other_degradation_total: int = Field(ge=0)
+    reranker_queue_wait_observations_total: int = Field(ge=0)
+    reranker_queue_wait_ms_sum: float = Field(ge=0.0)
+    reranker_queue_wait_ms_max: float = Field(ge=0.0)
+    reranker_inference_observations_total: int = Field(ge=0)
+    reranker_inference_ms_sum: float = Field(ge=0.0)
+    reranker_inference_ms_max: float = Field(ge=0.0)
+
+
 class IndexRequest(BaseModel):
     urls: list[HttpUrl] = Field(min_length=1, max_length=50)
 
