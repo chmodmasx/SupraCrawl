@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure for that canary, and Phase 3I adds process-local operational metrics without changing ranking behavior.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, and Phase 3J separates liveness from serving readiness without changing ranking behavior.
 
 ## Design rules
 
@@ -68,6 +68,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Keep reranker rollout isolated from the certified default retrieval path and fail back to first-stage hybrid.
 - Bound reranker queueing explicitly when backpressure is enabled rather than allowing unbounded request buildup.
 - Keep operational metrics read-only and independent from ranking decisions.
+- Keep liveness cheap and independent from dependency health; use readiness for serving-path admission decisions.
 
 ## API
 
@@ -106,6 +107,26 @@ A request that omits `mode` uses the configured default. The promoted default is
 Hybrid responses report `mode_requested`, `mode_used`, `degraded`, and `degradation_reason`. If the vector path is disabled or unavailable, the request falls back to BM25; failure of the lexical backbone remains a request failure.
 
 When the optional Phase 3G reranker is enabled, responses additionally report `reranker_enabled`, `reranker_used`, `reranker_degraded`, `reranker_degradation_reason`, `reranker_queue_wait_ms`, and `reranker_inference_ms`. Explicit BM25 requests bypass reranking. A reranker load or inference failure preserves the certified first-stage hybrid ranking and is reported separately from retrieval degradation. With Phase 3H backpressure enabled, capacity saturation also fails open to the first-stage hybrid ranking instead of allowing unbounded queue growth.
+
+### Health
+
+```text
+GET /v1/health
+```
+
+Returns cheap process liveness only: service identity and version. It intentionally does not test OpenSearch, dense embeddings, vector mappings, or reranker readiness, so dependency failures do not make the liveness probe fail.
+
+### Readiness
+
+```text
+GET /v1/ready
+```
+
+Returns `200` with `status: "ready"` only when the process can serve the configured retrieval path, otherwise `503` with structured component status and reason fields.
+
+Readiness validates the lexical OpenSearch indexes for every configured mode. For `hybrid`, it also requires dense retrieval to be enabled, validates the local dense runtime once per process, and validates the vector index mapping. BM25 mode does not require the dense runtime. When reranking is enabled, readiness requires startup warmup to be configured; readiness itself never loads the reranker model. Because application startup awaits that warmup, a reachable process with the requirement satisfied has already crossed the model-load boundary before serving traffic.
+
+Search failure and degradation semantics remain unchanged: readiness is an operational admission signal, not a replacement for the existing fail-open retrieval behavior.
 
 ### Metrics
 
@@ -171,7 +192,9 @@ The same Phase 3G load test observed reranker concurrent p95 of `2083.837 ms` ve
 
 Phase 3H adds an independently opt-in admission timeout of `200 ms` while keeping inference concurrency fixed at 1. Its certified 8-request burst produced `625.329 ms` concurrent API p95 against a preregistered `1000 ms` maximum, with 6 capacity fallbacks, 2 successful reranks, and successful post-burst recovery. Saturation is not latched as a model failure.
 
-Phase 3I adds process-local operational accounting. Its first certified code candidate recorded a controlled 8-request backpressure burst as 7 capacity fallbacks and 1 successful rerank with zero other degradation, 8 queue observations and 1 inference observation. The same candidate reran the inherited Phase 3G resource gate successfully with `293.507 ms` warm added p95 and `404.379 MiB` peak RSS delta, and reran the Phase 3H gate at `610.865 ms` concurrent API p95.
+Phase 3I adds process-local operational accounting. Its first certified code candidate recorded a controlled 8-request backpressure burst as 7 capacity fallbacks and 1 successful rerank with zero other degradation, 8 queue observations and 1 inference observation. The same candidate reran the inherited Phase 3G resource gate successfully with `293.507 ms` warm added p95 and `404.379 MiB` peak RSS delta, and reran the Phase 3H gate at `610.865 ms` concurrent API p95. Phase 3I was then certified again after merge on `main` at `200bac77659b2cfae828585643fb7bfe778d0f4d`.
+
+The Phase 3J code candidate preserves those historical gates before running readiness checks. On `93c63330a7ef59a1934f8dc5dd6872203d1089d4`, the inherited Phase 3G resource gate passed with `275.659 ms` warm added p95 and `406.32 MiB` peak RSS delta, while Phase 3H passed at `796.321 ms` concurrent API p95. Only after those gates and Phase 3I metrics passed did the readiness gate execute.
 
 ## Local stack
 
@@ -187,6 +210,8 @@ The Compose stack includes:
 - OpenSearch 3.8.0
 
 The standard Compose API does not bundle or enable the optional reranker runtime. The dedicated canary image is required for the Phase 3G/3H reranker path.
+
+For orchestration, use `/v1/health` as liveness and `/v1/ready` as the traffic-admission readiness probe. A process may remain live while readiness returns `503` if a required serving dependency is unavailable.
 
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
@@ -252,9 +277,15 @@ The exact frozen reranker is packaged in a dedicated canary image while the stan
 
 An independently opt-in `200 ms` admission timeout prevents an 8-request burst from building an unbounded reranker queue. Capacity saturation fails open to the certified hybrid ranking, remains distinct from model failure, and recovers after the burst. The preregistered live p95 gate passed at `625.329 ms` against `1000 ms` while historical Phase 3G behavior remained reproducible with backpressure disabled.
 
-### Phase 3I — Operational search metrics — current gate
+### Phase 3I — Operational search metrics — certified
 
-A read-only `/v1/metrics` endpoint exposes process-local search/reranker/backpressure counters plus queue/inference timing aggregates without new runtime dependencies or ranking changes. The first exact code candidate passed the live metrics accounting gate and the inherited Phase 3G resource and Phase 3H latency gates. Phase 3I remains open until this documentation-complete branch SHA and the resulting merged `main` SHA both pass the complete workflow matrix.
+The read-only `/v1/metrics` endpoint exposes process-local search/reranker/backpressure counters plus queue/inference timing aggregates without new runtime dependencies or ranking changes. Its exact implementation and documentation candidate passed the complete workflow matrix, and the merged `main` SHA `200bac77659b2cfae828585643fb7bfe778d0f4d` was independently certified with 9/9 push workflows and zero failures.
+
+### Phase 3J — Serving readiness contract — current gate
+
+`/v1/health` remains a cheap liveness contract while `/v1/ready` validates whether the configured serving path can accept traffic. Healthy baseline, reranker and backpressure canaries return health/readiness `200`; a reranker-enabled process without startup warmup remains live but returns readiness `503` with `reranker_startup_warmup_required`; and an OpenSearch-fault process remains live but returns readiness `503` with `opensearch_unavailable_or_indices_invalid`.
+
+The exact Phase 3J code candidate `93c63330a7ef59a1934f8dc5dd6872203d1089d4` passed `PASS_READINESS_GATE` and the complete 9/9 workflow matrix. Readiness does not load the reranker, does not change search degradation semantics, and introduces no new performance threshold. Phase 3J remains open until this documentation-complete branch SHA and the resulting merged `main` SHA both pass the complete workflow matrix.
 
 ### Later measured work
 
