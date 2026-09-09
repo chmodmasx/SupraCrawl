@@ -125,13 +125,13 @@ class LocalCrossEncoderReranker:
         self._load_lock = asyncio.Lock()
         self._inference_slots = asyncio.Semaphore(RERANKER_MAX_CONCURRENCY)
         self._backpressure_enabled = backpressure_enabled
-        self._telemetry: ContextVar[RerankerTelemetry] = ContextVar(
+        self._telemetry: ContextVar[RerankerTelemetry | None] = ContextVar(
             f"reranker_telemetry_{id(self)}",
-            default=RerankerTelemetry(),
+            default=None,
         )
 
     def last_telemetry(self) -> RerankerTelemetry:
-        return self._telemetry.get()
+        return self._telemetry.get() or RerankerTelemetry()
 
     async def warmup(self) -> None:
         await self._ensure_model()
