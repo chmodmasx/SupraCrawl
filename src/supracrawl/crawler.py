@@ -21,6 +21,8 @@ class CrawlOutcome:
     document_id: str | None = None
     content_hash: str | None = None
     chunks_indexed: int = 0
+    freshness_skipped: bool = False
+    freshness_age_s: float | None = None
     error: str | None = None
 
 
@@ -77,6 +79,7 @@ class Crawler:
         max_pages: int,
         max_depth: int,
         same_origin: bool,
+        refresh_after_s: int = 0,
     ) -> list[CrawlOutcome]:
         queue: deque[tuple[str, int]] = deque()
         allowed_origins: set[tuple[str, str, int | None]] = set()
@@ -99,7 +102,6 @@ class Crawler:
 
             try:
                 fetched = await self.fetcher.fetch_html(url)
-                extraction = await self.extractor.extract_fetched(fetched)
             except UnsafeUrlError as exc:
                 outcomes.append(
                     CrawlOutcome(
@@ -121,18 +123,60 @@ class Crawler:
                 )
                 continue
 
-            indexed = await self.indexer.index_extraction(fetched, extraction)
-            outcomes.append(
-                CrawlOutcome(
-                    url=indexed.url,
-                    depth=depth,
-                    indexed=indexed.indexed,
-                    document_id=indexed.document_id,
-                    content_hash=indexed.content_hash,
-                    chunks_indexed=indexed.chunks_indexed,
-                    error=indexed.error,
+            fresh = None
+            if refresh_after_s > 0:
+                fresh = await self.indexer.fresh_document(
+                    fetched.final_url,
+                    refresh_after_s,
                 )
-            )
+            if fresh is not None:
+                outcomes.append(
+                    CrawlOutcome(
+                        url=fetched.final_url,
+                        depth=depth,
+                        indexed=False,
+                        document_id=fresh.document_id,
+                        content_hash=fresh.content_hash,
+                        freshness_skipped=True,
+                        freshness_age_s=fresh.age_s,
+                    )
+                )
+            else:
+                try:
+                    extraction = await self.extractor.extract_fetched(fetched)
+                except UnsafeUrlError as exc:
+                    outcomes.append(
+                        CrawlOutcome(
+                            url=url,
+                            depth=depth,
+                            indexed=False,
+                            error=f"Unsafe URL: {exc}",
+                        )
+                    )
+                    continue
+                except FetchError as exc:
+                    outcomes.append(
+                        CrawlOutcome(
+                            url=url,
+                            depth=depth,
+                            indexed=False,
+                            error=f"Fetch failed: {exc}",
+                        )
+                    )
+                    continue
+
+                indexed = await self.indexer.index_extraction(fetched, extraction)
+                outcomes.append(
+                    CrawlOutcome(
+                        url=indexed.url,
+                        depth=depth,
+                        indexed=indexed.indexed,
+                        document_id=indexed.document_id,
+                        content_hash=indexed.content_hash,
+                        chunks_indexed=indexed.chunks_indexed,
+                        error=indexed.error,
+                    )
+                )
 
             if depth >= max_depth:
                 continue

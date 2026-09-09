@@ -215,11 +215,13 @@ async def crawl(request: CrawlRequest) -> CrawlResponse:
         max_pages=request.max_pages,
         max_depth=request.max_depth,
         same_origin=request.same_origin,
+        refresh_after_s=request.refresh_after_s,
     )
     pages = [CrawlPage.model_validate(asdict(outcome)) for outcome in outcomes]
     return CrawlResponse(
         pages_visited=len(pages),
         pages_indexed=sum(1 for page in pages if page.indexed),
+        pages_skipped_fresh=sum(1 for page in pages if page.freshness_skipped),
         pages=pages,
     )
 

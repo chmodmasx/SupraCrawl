@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "phase": "4A",
+  "gate": "phase4a-freshness-aware-crawl-admission-v1",
+  "base_certified_sha": "09ecd5b67bc54f9758c660b60ca13539697502fd",
+  "scope": "opt-in crawl freshness admission after network fetch and before extraction/indexing",
+  "request_contract": {
+    "field": "refresh_after_s",
+    "default": 0,
+    "minimum": 0,
+    "maximum": 2592000,
+    "fresh_condition": "age_s < refresh_after_s"
+  },
+  "acceptance": {
+    "default_zero_preserves_legacy_path": true,
+    "fresh_page_is_fetched": true,
+    "fresh_page_skips_extraction": true,
+    "fresh_page_skips_lexical_and_vector_reindex": true,
+    "fresh_page_preserves_link_discovery": true,
+    "fresh_skip_counts_as_visited_not_indexed": true,
+    "freshness_lookup_failure_reindexes": true,
+    "invalid_or_naive_fetched_at_reindexes": true,
+    "age_equal_to_refresh_after_reindexes": true
+  },
+  "constraints": {
+    "ranking_behavior_unchanged": true,
+    "reranker_behavior_unchanged": true,
+    "ssrf_policy_unchanged": true,
+    "network_fetch_is_not_skipped": true,
+    "no_scheduler": true,
+    "no_conditional_get": true,
+    "no_new_performance_threshold": true
+  }
+}
