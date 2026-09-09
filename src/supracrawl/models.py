@@ -139,6 +139,7 @@ class CrawlRequest(BaseModel):
     max_pages: int = Field(default=25, ge=1, le=100)
     max_depth: int = Field(default=1, ge=0, le=3)
     same_origin: bool = True
+    refresh_after_s: int = Field(default=0, ge=0, le=2_592_000)
 
 
 class CrawlPage(BaseModel):
@@ -148,6 +149,8 @@ class CrawlPage(BaseModel):
     document_id: str | None = None
     content_hash: str | None = None
     chunks_indexed: int = Field(default=0, ge=0)
+    freshness_skipped: bool = False
+    freshness_age_s: float | None = Field(default=None, ge=0.0)
     error: str | None = None
 
 
@@ -155,6 +158,7 @@ class CrawlResponse(BaseModel):
     success: bool = True
     pages_visited: int = Field(ge=0)
     pages_indexed: int = Field(ge=0)
+    pages_skipped_fresh: int = Field(default=0, ge=0)
     pages: list[CrawlPage]
 
 

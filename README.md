@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, and Phase 3J separates liveness from serving readiness without changing ranking behavior.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, and Phase 4A adds opt-in freshness admission for crawl reindex work without changing retrieval ranking.
 
 ## Design rules
 
@@ -69,6 +69,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Bound reranker queueing explicitly when backpressure is enabled rather than allowing unbounded request buildup.
 - Keep operational metrics read-only and independent from ranking decisions.
 - Keep liveness cheap and independent from dependency health; use readiness for serving-path admission decisions.
+- Keep crawl freshness opt-in and fail open to normal reindexing when freshness cannot be established safely.
 
 ## API
 
@@ -95,6 +96,10 @@ POST /v1/crawl
 ```
 
 Runs a bounded breadth-first crawl using the same SSRF, redirect, MIME, size and robots protections as extraction. Defaults to same-origin discovery and is hard-limited by request depth/page budgets.
+
+`refresh_after_s` is an additive opt-in freshness window. Its default is `0`, which preserves the legacy crawl path and performs normal extraction/indexing on every successful fetch. Values greater than zero still fetch each visited page so BFS link discovery is preserved, then query the existing document metadata by exact persisted final URL. A page is considered fresh only when its indexed age is strictly less than the requested window.
+
+Fresh pages skip extraction, chunking, embeddings and lexical/vector reindexing. They are reported as visited but not indexed with `freshness_skipped: true`, `document_id`, `content_hash`, and `freshness_age_s`; `pages_skipped_fresh` reports the aggregate count. Invalid or naive timestamps, an age exactly equal to the window, malformed lookup responses, or OpenSearch lookup failures fall through to normal reindexing. Phase 4A does not skip the network fetch and does not implement conditional GET, ETag/Last-Modified refresh, or scheduling.
 
 ### Search
 
@@ -281,15 +286,22 @@ An independently opt-in `200 ms` admission timeout prevents an 8-request burst f
 
 The read-only `/v1/metrics` endpoint exposes process-local search/reranker/backpressure counters plus queue/inference timing aggregates without new runtime dependencies or ranking changes. Its exact implementation and documentation candidate passed the complete workflow matrix, and the merged `main` SHA `200bac77659b2cfae828585643fb7bfe778d0f4d` was independently certified with 9/9 push workflows and zero failures.
 
-### Phase 3J — Serving readiness contract — current gate
+### Phase 3J — Serving readiness contract — certified
 
 `/v1/health` remains a cheap liveness contract while `/v1/ready` validates whether the configured serving path can accept traffic. Healthy baseline, reranker and backpressure canaries return health/readiness `200`; a reranker-enabled process without startup warmup remains live but returns readiness `503` with `reranker_startup_warmup_required`; and an OpenSearch-fault process remains live but returns readiness `503` with `opensearch_unavailable_or_indices_invalid`.
 
-The exact Phase 3J code candidate `93c63330a7ef59a1934f8dc5dd6872203d1089d4` passed `PASS_READINESS_GATE` and the complete 9/9 workflow matrix. Readiness does not load the reranker, does not change search degradation semantics, and introduces no new performance threshold. Phase 3J remains open until this documentation-complete branch SHA and the resulting merged `main` SHA both pass the complete workflow matrix.
+The exact Phase 3J code candidate `93c63330a7ef59a1934f8dc5dd6872203d1089d4` passed `PASS_READINESS_GATE` and the complete 9/9 workflow matrix. The documentation-complete candidate and the merged `main` SHA `09ecd5b67bc54f9758c660b60ca13539697502fd` were then independently certified with 9/9 workflows and zero failures. Readiness does not load the reranker, does not change search degradation semantics, and introduces no new performance threshold.
+
+### Phase 4A — Freshness-aware crawl admission — current gate
+
+`/v1/crawl` now accepts an opt-in `refresh_after_s` window while preserving `0` as the legacy default. Freshness is checked only after the protected network fetch, so link discovery is unchanged; a fresh hit skips extraction, chunking, embeddings and lexical/vector writes. Freshness lookup failures and unsafe timestamp states fail open to the existing reindex path.
+
+The preregistered code candidate `d3aa2679b94d3b26993302bd94680381c96178c7` passed the complete 9/9 workflow matrix, including Phase 3F baseline conformance and the full Phase 3G/3H/3I/3J live sequence. Phase 4A remains open until this documentation-complete SHA and its resulting merged `main` SHA pass the same complete workflow matrix. Conditional GET, network-fetch avoidance and scheduling remain explicitly out of scope.
 
 ### Later measured work
 
-- continuous crawling and refresh policies;
+- conditional GET / ETag / Last-Modified refresh after the freshness-admission baseline is certified;
+- crawl scheduling and continuous refresh only after refresh behavior is measured;
 - per-domain extraction rules;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;

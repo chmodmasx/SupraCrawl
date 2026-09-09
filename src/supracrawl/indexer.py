@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from .chunking import chunk_markdown
 from .config import Settings
@@ -22,6 +23,14 @@ class IndexOutcome:
     vector_chunks_indexed: int = 0
     vector_error: str | None = None
     error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FreshIndexHit:
+    document_id: str
+    content_hash: str
+    fetched_at: str
+    age_s: float
 
 
 class Indexer:
@@ -53,6 +62,83 @@ class Indexer:
             return IndexOutcome(url=url, indexed=False, error=f"Fetch failed: {exc}")
 
         return await self.index_extraction(fetched, extraction)
+
+    async def fresh_document(
+        self,
+        url: str,
+        refresh_after_s: int,
+        *,
+        now: datetime | None = None,
+    ) -> FreshIndexHit | None:
+        if refresh_after_s <= 0:
+            return None
+
+        body = {
+            "size": 1,
+            "track_total_hits": False,
+            "_source": ["document_id", "content_hash", "fetched_at", "url"],
+            "query": {"term": {"url": url}},
+            "sort": [{"fetched_at": {"order": "desc"}}],
+        }
+        try:
+            await self.store.ensure_indices()
+            response = await self.store._request_with_index_recovery(
+                "POST",
+                f"/{self.settings.opensearch_documents_index}/_search",
+                json=body,
+            )
+        except SearchBackendError:
+            return None
+
+        if response.status_code >= 400:
+            return None
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        hits_payload = payload.get("hits")
+        if not isinstance(hits_payload, dict):
+            return None
+        hits = hits_payload.get("hits")
+        if not isinstance(hits, list) or not hits:
+            return None
+        hit = hits[0]
+        if not isinstance(hit, dict):
+            return None
+        source = hit.get("_source")
+        if not isinstance(source, dict):
+            return None
+
+        document_id = source.get("document_id")
+        digest = source.get("content_hash")
+        fetched_at = source.get("fetched_at")
+        if not all(isinstance(value, str) and value for value in (document_id, digest, fetched_at)):
+            return None
+
+        try:
+            indexed_at = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if indexed_at.tzinfo is None:
+            return None
+        current = now or datetime.now(UTC)
+        if current.tzinfo is None:
+            return None
+        age_s = max(
+            0.0,
+            (current.astimezone(UTC) - indexed_at.astimezone(UTC)).total_seconds(),
+        )
+        if age_s >= refresh_after_s:
+            return None
+
+        return FreshIndexHit(
+            document_id=document_id,
+            content_hash=digest,
+            fetched_at=fetched_at,
+            age_s=round(age_s, 3),
+        )
 
     async def index_extraction(
         self,
