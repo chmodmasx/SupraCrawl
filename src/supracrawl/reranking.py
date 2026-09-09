@@ -4,6 +4,8 @@ import asyncio
 import hashlib
 import importlib.metadata
 import math
+import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -23,6 +25,7 @@ RERANKER_FASTEMBED_VERSION = "0.8.0"
 RERANKER_CANDIDATE_POOL_SIZE = 10
 RERANKER_PROTECTED_TOP_K = 5
 RERANKER_MAX_CONCURRENCY = 1
+RERANKER_ADMISSION_TIMEOUT_MS = 200.0
 RERANKER_STRATEGY = "score_desc_within_frozen_top5_and_tail"
 RERANKER_REQUIRED_FILES = (
     "config.json",
@@ -38,6 +41,10 @@ class RerankerBackendError(RuntimeError):
     pass
 
 
+class RerankerCapacityError(RerankerBackendError):
+    pass
+
+
 class _CrossEncoder(Protocol):
     def rerank(self, query: str, documents: list[str]) -> Any: ...
 
@@ -48,6 +55,12 @@ class _Reranker(Protocol):
         query: str,
         results: list[dict[str, Any]],
     ) -> list[dict[str, Any]]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RerankerTelemetry:
+    queue_wait_ms: float | None = None
+    inference_ms: float | None = None
 
 
 @dataclass(slots=True)
@@ -61,6 +74,8 @@ class ControlledSearchExecution:
     reranker_used: bool = False
     reranker_degraded: bool = False
     reranker_degradation_reason: str | None = None
+    reranker_queue_wait_ms: float | None = None
+    reranker_inference_ms: float | None = None
 
 
 def _candidate_text(result: dict[str, Any]) -> str:
@@ -97,18 +112,26 @@ def _top5_preserving_indices(scores: list[float], protected_top_k: int) -> list[
 
 
 class LocalCrossEncoderReranker:
-    """Exact Candidate 2 runtime with bounded inference and latched load failure.
+    """Exact Candidate 2 runtime with optional bounded admission control.
 
     Model identity and ranking constants are fixed because Phase 3F certified
     exactly this candidate. A failed model load is not retried in the same
     process; restarting the canary is the explicit retry boundary.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, backpressure_enabled: bool = False) -> None:
         self._model: _CrossEncoder | None = None
         self._load_error: str | None = None
         self._load_lock = asyncio.Lock()
         self._inference_slots = asyncio.Semaphore(RERANKER_MAX_CONCURRENCY)
+        self._backpressure_enabled = backpressure_enabled
+        self._telemetry: ContextVar[RerankerTelemetry] = ContextVar(
+            f"reranker_telemetry_{id(self)}",
+            default=RerankerTelemetry(),
+        )
+
+    def last_telemetry(self) -> RerankerTelemetry:
+        return self._telemetry.get()
 
     async def warmup(self) -> None:
         await self._ensure_model()
@@ -223,11 +246,32 @@ class LocalCrossEncoderReranker:
             raise RerankerBackendError("reranker returned non-finite scores")
         return scores
 
+    async def _acquire_inference_slot(self) -> float:
+        queue_started = time.perf_counter()
+        if not self._backpressure_enabled:
+            await self._inference_slots.acquire()
+            return (time.perf_counter() - queue_started) * 1000.0
+
+        try:
+            await asyncio.wait_for(
+                self._inference_slots.acquire(),
+                timeout=RERANKER_ADMISSION_TIMEOUT_MS / 1000.0,
+            )
+        except TimeoutError as exc:
+            queue_wait_ms = (time.perf_counter() - queue_started) * 1000.0
+            self._telemetry.set(RerankerTelemetry(queue_wait_ms=queue_wait_ms))
+            raise RerankerCapacityError(
+                "reranker capacity saturated after "
+                f"{RERANKER_ADMISSION_TIMEOUT_MS:.0f} ms admission timeout"
+            ) from exc
+        return (time.perf_counter() - queue_started) * 1000.0
+
     async def rerank(
         self,
         query: str,
         results: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
+        self._telemetry.set(RerankerTelemetry())
         query = query.strip()
         if not query:
             raise ValueError("query must not be empty")
@@ -238,8 +282,19 @@ class LocalCrossEncoderReranker:
         candidate_results = results[:candidate_count]
         documents = [_candidate_text(result) for result in candidate_results]
         model = await self._ensure_model()
-        async with self._inference_slots:
+        queue_wait_ms = await self._acquire_inference_slot()
+        inference_started = time.perf_counter()
+        try:
             scores = await asyncio.to_thread(self._score_sync, model, query, documents)
+        finally:
+            inference_ms = (time.perf_counter() - inference_started) * 1000.0
+            self._inference_slots.release()
+            self._telemetry.set(
+                RerankerTelemetry(
+                    queue_wait_ms=queue_wait_ms,
+                    inference_ms=inference_ms,
+                )
+            )
         order = _top5_preserving_indices(scores, RERANKER_PROTECTED_TOP_K)
 
         reranked: list[dict[str, Any]] = []
@@ -278,6 +333,17 @@ class ControlledRerankingSearchService:
         self.base_service = base_service
         self.reranker = reranker
 
+    def _runtime_telemetry(self) -> RerankerTelemetry:
+        if self.reranker is None:
+            return RerankerTelemetry()
+        getter = getattr(self.reranker, "last_telemetry", None)
+        if not callable(getter):
+            return RerankerTelemetry()
+        telemetry = getter()
+        if not isinstance(telemetry, RerankerTelemetry):
+            return RerankerTelemetry()
+        return telemetry
+
     @staticmethod
     def _wrap(
         execution: SearchExecution,
@@ -287,7 +353,9 @@ class ControlledRerankingSearchService:
         used: bool = False,
         reranker_degraded: bool = False,
         reason: str | None = None,
+        telemetry: RerankerTelemetry | None = None,
     ) -> ControlledSearchExecution:
+        telemetry = telemetry or RerankerTelemetry()
         return ControlledSearchExecution(
             results=results,
             mode_requested=execution.mode_requested,
@@ -298,6 +366,8 @@ class ControlledRerankingSearchService:
             reranker_used=used,
             reranker_degraded=reranker_degraded,
             reranker_degradation_reason=reason,
+            reranker_queue_wait_ms=telemetry.queue_wait_ms,
+            reranker_inference_ms=telemetry.inference_ms,
         )
 
     async def search(
@@ -348,6 +418,7 @@ class ControlledRerankingSearchService:
                 enabled=True,
                 reranker_degraded=True,
                 reason=f"reranker unavailable: {exc}",
+                telemetry=self._runtime_telemetry(),
             )
 
         return self._wrap(
@@ -355,4 +426,5 @@ class ControlledRerankingSearchService:
             reranked[:limit],
             enabled=True,
             used=True,
+            telemetry=self._runtime_telemetry(),
         )

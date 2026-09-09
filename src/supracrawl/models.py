@@ -69,6 +69,8 @@ class SearchResponse(BaseModel):
     reranker_used: bool = False
     reranker_degraded: bool = False
     reranker_degradation_reason: str | None = None
+    reranker_queue_wait_ms: float | None = None
+    reranker_inference_ms: float | None = None
 
 
 class IndexRequest(BaseModel):
