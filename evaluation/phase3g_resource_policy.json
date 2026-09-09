@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "phase": "3G",
+  "gate": "phase3g-controlled-reranker-live-resources-v1",
+  "base_certified_sha": "a6b0edd06f814d5389ef127f33a0928585ca07cd",
+  "purpose": "Certify bounded live canary latency, process peak RSS, CPU reporting, and deterministic behavior under fixed concurrent load without changing ranking logic.",
+  "inherited_limits": {
+    "source": "evaluation/phase3f_policy.json#promotion",
+    "p95_added_latency_ms_max": 500,
+    "peak_rss_delta_mib_max": 2048
+  },
+  "load_profile": {
+    "spot_queries_source": "evaluation/phase3d_policy.json#frozen_spot_queries",
+    "spot_query_count": 4,
+    "warmup_rounds": 1,
+    "sequential_rounds": 5,
+    "concurrent_rounds": 3,
+    "concurrency": 8,
+    "request_limit": 10,
+    "request_timeout_seconds": 180
+  },
+  "requirements": {
+    "reranker_max_concurrency": 1,
+    "all_live_requests_must_succeed": true,
+    "reranker_must_not_degrade": true,
+    "ranking_must_be_deterministic": true,
+    "cpu_time_must_be_reported": true,
+    "memory_must_be_reported": true,
+    "thresholds_must_not_be_relaxed_after_observation": true
+  },
+  "decision_rule": "PASS_RESOURCE_GATE requires every bounded threshold and correctness check to pass under the fixed load profile. A failure may reject the canary; thresholds must not be weakened after observing results."
+}

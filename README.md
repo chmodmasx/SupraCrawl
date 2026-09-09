@@ -48,6 +48,8 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image.
+
 ## Design rules
 
 - HTTP fetch first; browser rendering only as fallback.
@@ -63,6 +65,7 @@ The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexic
 - Keep lexical indexing authoritative even when vector indexing fails.
 - Validate dense candidates against the current document `content_hash` before fusion.
 - Introduce rerankers only after a benchmark proves an additional gain.
+- Keep reranker rollout isolated from the certified default retrieval path and fail back to first-stage hybrid.
 
 ## API
 
@@ -100,11 +103,14 @@ A request that omits `mode` uses the configured default. The promoted default is
 
 Hybrid responses report `mode_requested`, `mode_used`, `degraded`, and `degradation_reason`. If the vector path is disabled or unavailable, the request falls back to BM25; failure of the lexical backbone remains a request failure.
 
+When the optional Phase 3G reranker is enabled, responses additionally report `reranker_enabled`, `reranker_used`, `reranker_degraded`, and `reranker_degradation_reason`. Explicit BM25 requests bypass reranking. A reranker load or inference failure preserves the certified first-stage hybrid ranking and is reported separately from retrieval degradation.
+
 ## Retrieval defaults
 
 ```text
 SUPRACRAWL_SEARCH_MODE=hybrid
 SUPRACRAWL_DENSE_ENABLED=true
+SUPRACRAWL_RERANKER_ENABLED=false
 ```
 
 Operator opt-out:
@@ -124,6 +130,32 @@ The certified hybrid configuration is:
 
 No hosted embedding API or API key is required.
 
+## Controlled reranker canary
+
+Phase 3G uses a dedicated `Dockerfile.reranker` image so the standard production image retains the previously certified hybrid dependency path. The canary runtime pins the exact Candidate 2 environment and preloads the frozen model for offline startup.
+
+The frozen reranker identity is:
+
+- model: `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`
+- revision: `1427fd6`
+- runtime: FastEmbed `0.8.0`
+- ONNX: `onnx/model_quint8_avx2.onnx`
+- ONNX SHA-256: `6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b`
+- candidate pool: first-stage top-10
+- protected set: first-stage top-5 membership
+- strategy: `score_desc_within_frozen_top5_and_tail`
+
+The current Phase 3G candidate has live-gated model warmup, offline model verification, exact provenance, top-10/top-5 invariants, stable ranking, BM25 bypass, real failure fallback, and a latched model-load failure boundary.
+
+The preregistered live resource gate passed with:
+
+- warm added p95: `275.988 ms` against a `500 ms` maximum;
+- peak RSS delta: `407.742 MiB` against a `2048 MiB` maximum;
+- 24 concurrent requests in 3 rounds of width 8 with no failures/degradations and deterministic ranking;
+- incremental CPU reported as `41.07 s` for the measured workload.
+
+The same load test observed reranker concurrent p95 of `2083.837 ms` versus `392.841 ms` for the baseline. No concurrent-latency threshold was preregistered, so this is not treated as a failed historical gate, but it is a rollout constraint: the reranker remains **default OFF / canary only** rather than a global default.
+
 ## Local stack
 
 ```bash
@@ -136,6 +168,8 @@ The Compose stack includes:
 - Readability / Playwright extraction worker
 - Redis extraction cache
 - OpenSearch 3.8.0
+
+The standard Compose API does not bundle or enable the optional Phase 3G reranker runtime.
 
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
@@ -185,18 +219,28 @@ Real OpenSearch vector storage/querying, expanded exact-identifier benchmark, ph
 
 Production local embedding/index/search path, current-content hash validation, vector-side degradation to BM25, lexical failure semantics, standard-container packaging, and real API fault matrix. Hybrid remained opt-in during this phase.
 
-### Phase 3E — Hybrid default promotion — current gate
+### Phase 3E — Hybrid default promotion — certified
 
-Promote the already-certified hybrid path to the global default only if omitted-mode API requests preserve the frozen quality, exact-identifier, latency, upgrade, fallback and Hermes gates. No ranking/model/schema changes are allowed in this phase.
+The already-certified hybrid path was promoted to the global default after omitted-mode API requests preserved the frozen quality, exact-identifier, latency, upgrade, fallback and Hermes gates without a ranking/model/schema change.
+
+### Phase 3F — Reranker evaluation and Candidate 2 selection — certified
+
+A preregistered cross-encoder experiment selected the exact top-5-preserving Candidate 2 after the independent frozen holdout passed the quality, Recall@5, latency and memory promotion checks. The holdout also recorded a lexical exact-identifier family regression, so the result does not justify unconditional reranker rollout.
+
+### Phase 3G — Controlled reranker production capability — current gate
+
+The branch candidate packages the exact frozen reranker in a dedicated canary image, keeps the standard image/default path unchanged, performs startup warmup, bounds inference concurrency, falls back to certified hybrid on failure, latches load failure until process restart, exposes independent reranker telemetry, and has passed live success/failure/resource gates on its exact candidate SHA.
+
+Phase 3G is not complete until the final branch candidate and the resulting merged `main` SHA both pass the complete workflow matrix. Global reranker promotion remains out of scope; default OFF / canary is the intended rollout state.
 
 ### Later measured work
 
-- optional reranker over a small top-N, only if a separate benchmark proves additional value;
 - continuous crawling and refresh policies;
 - per-domain extraction rules;
 - observability and backpressure;
 - persistent originals/provenance storage where justified;
-- scale-specific ANN/GPU work only when corpus/load measurements require it.
+- scale-specific ANN/GPU work only when corpus/load measurements require it;
+- any new ranking behavior only with a newly preregistered evaluation and fresh independent validation data.
 
 ## Verification policy
 

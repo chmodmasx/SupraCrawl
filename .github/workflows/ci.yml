@@ -48,6 +48,40 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build API image
         run: docker build -t supracrawl-api:ci .
+      - name: Build and verify reranker canary image
+        run: docker build -f Dockerfile.reranker -t supracrawl-api-reranker:ci .
+      - name: Verify canary models with network disabled
+        run: |
+          docker run --rm --network none supracrawl-api-reranker:ci \
+            python scripts/verify_reranker_runtime.py
+      - name: Verify reranker canary runtime contract
+        run: |
+          docker run --rm -i supracrawl-api-reranker:ci python - <<'PY'
+          import os
+          from importlib.metadata import version
+
+          from supracrawl.config import Settings
+          from supracrawl.reranking import (
+              RERANKER_FASTEMBED_VERSION,
+              RERANKER_MODEL_FILE,
+              RERANKER_MODEL_FILE_SHA256,
+              RERANKER_MODEL_REPO,
+              RERANKER_REVISION,
+          )
+
+          settings = Settings()
+          assert version("fastembed") == RERANKER_FASTEMBED_VERSION == "0.8.0"
+          assert version("huggingface-hub")
+          assert settings.reranker_enabled is True
+          assert settings.reranker_warmup_on_startup is True
+          assert os.environ["HF_HUB_OFFLINE"] == "1"
+          assert RERANKER_MODEL_REPO == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+          assert RERANKER_REVISION == "1427fd6"
+          assert RERANKER_MODEL_FILE == "onnx/model_quint8_avx2.onnx"
+          assert RERANKER_MODEL_FILE_SHA256 == (
+              "6c2513767fb63d008a4377bef7a7a3555433d9436342bb53e35a3a72ffc52d4b"
+          )
+          PY
       - name: Build extractor image
         run: docker build -t supracrawl-extractor:ci services/extractor-worker
       - name: API health smoke test
@@ -64,3 +98,141 @@ jobs:
           done
           docker logs supracrawl-api-smoke
           exit 1
+      - name: Reranker canary warmup health smoke test
+        run: |
+          docker run -d --rm --name supracrawl-reranker-smoke \
+            -e SUPRACRAWL_REDIS_URL= \
+            -p 18081:8080 supracrawl-api-reranker:ci
+          trap 'docker stop supracrawl-reranker-smoke >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18081/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs supracrawl-reranker-smoke
+          exit 1
+
+  reranker-live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install exact canary verification runtime
+        run: pip install -e '.[dev,hybrid,reranker]'
+      - name: Build reranker canary image
+        run: docker build -f Dockerfile.reranker -t supracrawl-api-reranker:e2e .
+      - name: Start shared OpenSearch
+        run: docker compose -p phase3g-reranker up -d opensearch
+      - name: Wait for OpenSearch
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Phase 3G OpenSearch did not become healthy" >&2
+          exit 1
+      - name: Start canary comparison APIs
+        run: |
+          docker run -d --name phase3g-baseline \
+            --network phase3g-reranker_default \
+            -p 18082:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://opensearch:9200 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=false \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=false \
+            supracrawl-api-reranker:e2e
+          docker run -d --name phase3g-reranker \
+            --network phase3g-reranker_default \
+            -p 18083:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://opensearch:9200 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=true \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=true \
+            supracrawl-api-reranker:e2e
+          docker run -d --name phase3g-reranker-fault \
+            --network phase3g-reranker_default \
+            -p 18084:8080 \
+            -e SUPRACRAWL_REDIS_URL= \
+            -e SUPRACRAWL_OPENSEARCH_URL=http://opensearch:9200 \
+            -e SUPRACRAWL_DENSE_ENABLED=true \
+            -e SUPRACRAWL_SEARCH_MODE=hybrid \
+            -e SUPRACRAWL_RERANKER_ENABLED=true \
+            -e SUPRACRAWL_RERANKER_WARMUP_ON_STARTUP=false \
+            --entrypoint /bin/sh \
+            supracrawl-api-reranker:e2e \
+            -c 'rm -rf "$HF_HOME/hub/models--cross-encoder--mmarco-mMiniLMv2-L12-H384-v1"; \
+                exec uvicorn supracrawl.app:app --host 0.0.0.0 --port 8080'
+      - name: Wait for canary comparison APIs
+        run: |
+          for attempt in $(seq 1 90); do
+            baseline_ok=0
+            reranker_ok=0
+            fault_ok=0
+            curl -fsS http://127.0.0.1:18082/v1/health >/dev/null && baseline_ok=1 || true
+            curl -fsS http://127.0.0.1:18083/v1/health >/dev/null && reranker_ok=1 || true
+            curl -fsS http://127.0.0.1:18084/v1/health >/dev/null && fault_ok=1 || true
+            if [ "$baseline_ok" -eq 1 ] && [ "$reranker_ok" -eq 1 ] && [ "$fault_ok" -eq 1 ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Phase 3G canary comparison APIs did not become healthy" >&2
+          exit 1
+      - name: Run live reranker contract
+        env:
+          PHASE3G_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3G_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3G_FAULT_API_URL: http://127.0.0.1:18084
+          SUPRACRAWL_OPENSEARCH_URL: http://127.0.0.1:9200
+        run: python verification/verify_phase3g_reranker_live.py
+      - name: Run live reranker resource gate
+        env:
+          PHASE3G_BASELINE_API_URL: http://127.0.0.1:18082
+          PHASE3G_RERANKER_API_URL: http://127.0.0.1:18083
+          PHASE3G_BASELINE_CONTAINER: phase3g-baseline
+          PHASE3G_RERANKER_CONTAINER: phase3g-reranker
+          PHASE3G_RESOURCE_OUTPUT: phase3g-resource-report.json
+        run: python verification/verify_phase3g_resources.py
+      - name: Show live reranker resource evidence
+        if: always()
+        run: |
+          if [ -f phase3g-resource-report.json ]; then
+            cat phase3g-resource-report.json
+          fi
+      - name: Upload live reranker resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3g-live-resource-evidence
+          path: phase3g-resource-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Container state
+        if: always()
+        run: |
+          docker ps -a
+          docker compose -p phase3g-reranker ps -a
+      - name: Container logs
+        if: failure()
+        run: |
+          docker logs phase3g-baseline || true
+          docker logs phase3g-reranker || true
+          docker logs phase3g-reranker-fault || true
+          docker compose -p phase3g-reranker logs --no-color --tail=500 || true
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f phase3g-baseline phase3g-reranker phase3g-reranker-fault \
+            >/dev/null 2>&1 || true
+          docker compose -p phase3g-reranker down -v --remove-orphans

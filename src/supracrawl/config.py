@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     dense_passage_prefix: str = "passage: "
     opensearch_vector_chunks_index: str = "supracrawl-vector-chunks-v1"
 
+    # Phase 3G controlled capability. The certified model identity and ranking
+    # constants are intentionally not environment-configurable.
+    reranker_enabled: bool = False
+    reranker_warmup_on_startup: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:
