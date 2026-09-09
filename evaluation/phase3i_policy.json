@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "phase": "3I",
+  "gate": "phase3i-reranker-operational-metrics-v1",
+  "base_certified_sha": "1c40e102876c4f69fd5d40bb1aac875c6aa9325f",
+  "scope": "process",
+  "endpoint": "/v1/metrics",
+  "requirements": {
+    "remote_reset_allowed": false,
+    "new_runtime_dependencies_allowed": false,
+    "ranking_change_allowed": false,
+    "baseline_delta_requests": 1,
+    "reranker_delta_requests": 1,
+    "backpressure_burst_concurrency": 8,
+    "capacity_fallback_min": 1,
+    "reranker_used_min": 1
+  },
+  "inherited_gates": [
+    "phase3g-controlled-reranker-live-resources-v1",
+    "phase3h-reranker-backpressure-v1"
+  ],
+  "notes": [
+    "Counters are process-local and reset only on process restart.",
+    "Phase 3G and Phase 3H gates run before this gate and therefore measure recorder overhead."
+  ]
+}
