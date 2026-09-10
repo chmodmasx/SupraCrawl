@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, and Phase 4A adds opt-in freshness admission for crawl reindex work without changing retrieval ranking.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, and Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves without changing retrieval ranking.
 
 ## Design rules
 
@@ -70,6 +70,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Keep operational metrics read-only and independent from ranking decisions.
 - Keep liveness cheap and independent from dependency health; use readiness for serving-path admission decisions.
 - Keep crawl freshness opt-in and fail open to normal reindexing when freshness cannot be established safely.
+- Allow target-page network skipping only for crawl leaves, after the same SSRF/robots admission as normal fetching, so BFS discovery semantics remain unchanged.
 
 ## API
 
@@ -97,9 +98,15 @@ POST /v1/crawl
 
 Runs a bounded breadth-first crawl using the same SSRF, redirect, MIME, size and robots protections as extraction. Defaults to same-origin discovery and is hard-limited by request depth/page budgets.
 
-`refresh_after_s` is an additive opt-in freshness window. Its default is `0`, which preserves the legacy crawl path and performs normal extraction/indexing on every successful fetch. Values greater than zero still fetch each visited page so BFS link discovery is preserved, then query the existing document metadata by exact persisted final URL. A page is considered fresh only when its indexed age is strictly less than the requested window.
+`refresh_after_s` is an additive opt-in freshness window. Its default is `0`, which preserves the legacy crawl path and performs normal extraction/indexing on every successful fetch. Under the certified Phase 4A behavior, values greater than zero still fetch each visited page so BFS link discovery is preserved, then query existing document metadata by exact persisted final URL. A page is considered fresh only when its indexed age is strictly less than the requested window.
 
-Fresh pages skip extraction, chunking, embeddings and lexical/vector reindexing. They are reported as visited but not indexed with `freshness_skipped: true`, `document_id`, `content_hash`, and `freshness_age_s`; `pages_skipped_fresh` reports the aggregate count. Invalid or naive timestamps, an age exactly equal to the window, malformed lookup responses, or OpenSearch lookup failures fall through to normal reindexing. Phase 4A does not skip the network fetch and does not implement conditional GET, ETag/Last-Modified refresh, or scheduling.
+Fresh pages skip extraction, chunking, embeddings and lexical/vector reindexing. They are reported as visited but not indexed with `freshness_skipped: true`, `document_id`, `content_hash`, and `freshness_age_s`; `pages_skipped_fresh` reports the aggregate count. Invalid or naive timestamps, an age exactly equal to the window, malformed lookup responses, or OpenSearch lookup failures fall through to normal reindexing.
+
+Phase 4B adds `conditional_revalidate_leaves`, independently opt-in and `false` by default. It is active only when `conditional_revalidate_leaves=true`, `refresh_after_s>0`, and the current page is a crawl leaf (`depth >= max_depth`). Non-leaf pages always retain the Phase 4A full-fetch path so child discovery is unchanged.
+
+For an eligible fresh leaf, SupraCrawl first performs the same public-URL and `robots.txt` admission used by normal fetching; only after that admission succeeds may it skip the target-page GET. Such pages set `network_fetch_skipped: true` and contribute to `pages_network_skipped_fresh`. A stale leaf with persisted `ETag` and/or `Last-Modified` sends `If-None-Match` / `If-Modified-Since`. Conditional validators are dropped before following redirects.
+
+An HTTP `304 Not Modified` skips extraction and lexical/vector reindexing and refreshes the stored document timestamp. It is reported with `revalidated_not_modified: true` and contributes to `pages_revalidated_not_modified`. If the metadata touch fails, SupraCrawl immediately performs an unconditional full GET and resumes the normal extraction/indexing path. Conditional `200` responses also continue through the normal path. Missing validators, lookup failures, or best-effort validator-persistence failures never make crawling fail closed. Scheduling remains out of scope.
 
 ### Search
 
@@ -292,16 +299,21 @@ The read-only `/v1/metrics` endpoint exposes process-local search/reranker/backp
 
 The exact Phase 3J code candidate `93c63330a7ef59a1934f8dc5dd6872203d1089d4` passed `PASS_READINESS_GATE` and the complete 9/9 workflow matrix. The documentation-complete candidate and the merged `main` SHA `09ecd5b67bc54f9758c660b60ca13539697502fd` were then independently certified with 9/9 workflows and zero failures. Readiness does not load the reranker, does not change search degradation semantics, and introduces no new performance threshold.
 
-### Phase 4A — Freshness-aware crawl admission — current gate
+### Phase 4A — Freshness-aware crawl admission — certified
 
-`/v1/crawl` now accepts an opt-in `refresh_after_s` window while preserving `0` as the legacy default. Freshness is checked only after the protected network fetch, so link discovery is unchanged; a fresh hit skips extraction, chunking, embeddings and lexical/vector writes. Freshness lookup failures and unsafe timestamp states fail open to the existing reindex path.
+`/v1/crawl` accepts an opt-in `refresh_after_s` window while preserving `0` as the legacy default. Freshness is checked only after the protected network fetch, so link discovery is unchanged; a fresh hit skips extraction, chunking, embeddings and lexical/vector writes. Freshness lookup failures and unsafe timestamp states fail open to the existing reindex path.
 
-The preregistered code candidate `d3aa2679b94d3b26993302bd94680381c96178c7` passed the complete 9/9 workflow matrix, including Phase 3F baseline conformance and the full Phase 3G/3H/3I/3J live sequence. Phase 4A remains open until this documentation-complete SHA and its resulting merged `main` SHA pass the same complete workflow matrix. Conditional GET, network-fetch avoidance and scheduling remain explicitly out of scope.
+The preregistered code candidate `d3aa2679b94d3b26993302bd94680381c96178c7` passed the complete 9/9 workflow matrix, followed by a documentation-complete candidate and the merged `main` SHA `bf3db918b123c93301ad92ec047717c7af6c7e01`, which was independently certified with 9/9 push workflows and zero failures. Conditional GET and target-page network avoidance were intentionally deferred to the next measured phase.
+
+### Phase 4B — Leaf conditional HTTP revalidation — current gate
+
+Phase 4B adds independently opt-in `conditional_revalidate_leaves` behavior on top of the certified Phase 4A freshness baseline. Only crawl leaves are eligible, preserving full-fetch behavior on every page that can discover children. Fresh leaves may skip the target-page GET only after the same SSRF/robots admission as normal fetching succeeds; stale leaves may send persisted `ETag`/`Last-Modified` validators. Redirects discard validators, `304` refreshes the stored document timestamp without reindexing, and a failed metadata touch forces an immediate unconditional GET.
+
+The preregistered corrected code candidate `ee3ba836fd5e22b04b97eb6428bbb3c62f3d397b` passed the complete 9/9 workflow matrix after an earlier Ruff-only rejection and a voluntarily rejected security-admission candidate were excluded from evidence. Phase 4B remains open until this documentation-complete SHA and its resulting merged `main` SHA independently pass the same complete workflow matrix.
 
 ### Later measured work
 
-- conditional GET / ETag / Last-Modified refresh after the freshness-admission baseline is certified;
-- crawl scheduling and continuous refresh only after refresh behavior is measured;
+- crawl scheduling and continuous refresh only after conditional refresh behavior is certified and measured;
 - per-domain extraction rules;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
