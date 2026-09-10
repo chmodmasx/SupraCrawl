@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
-
-import pytest
-
-from verification.verify_phase4c_refresh_efficiency import _run
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "evaluation/phase4c_refresh_efficiency_policy.json"
+VERIFY_PATH = ROOT / "verification/verify_phase4c_refresh_efficiency.py"
+OUTPUT_PATH = ROOT / "phase4c-refresh-efficiency-report.json"
 
 
 def test_phase4c_policy_is_measurement_only_and_bound_to_certified_main() -> None:
@@ -28,10 +28,23 @@ def test_phase4c_policy_is_measurement_only_and_bound_to_certified_main() -> Non
     assert policy["fixture"]["html_body_bytes"] == 262_144
 
 
-@pytest.mark.asyncio
-async def test_phase4c_refresh_efficiency_gate() -> None:
-    policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
-    report = await _run(policy)
+def test_phase4c_refresh_efficiency_gate() -> None:
+    completed = subprocess.run(
+        [sys.executable, str(VERIFY_PATH)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        assert completed.returncode == 0, (
+            "Phase 4C verifier failed:\n"
+            f"stdout:\n{completed.stdout}\n"
+            f"stderr:\n{completed.stderr}"
+        )
+        report = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
+    finally:
+        OUTPUT_PATH.unlink(missing_ok=True)
 
     assert report["decision"] == "PASS_REFRESH_EFFICIENCY_GATE"
     assert report["fixture_body_bytes"] == 262_144
