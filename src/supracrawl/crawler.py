@@ -8,7 +8,7 @@ from selectolax.parser import HTMLParser
 
 from .extractor import Extractor
 from .fetcher import FetchError, HttpFetcher
-from .indexer import Indexer
+from .indexer import Indexer, RevalidationIndexHit
 from .security import UnsafeUrlError
 from .urls import normalize_url
 
@@ -23,6 +23,8 @@ class CrawlOutcome:
     chunks_indexed: int = 0
     freshness_skipped: bool = False
     freshness_age_s: float | None = None
+    network_fetch_skipped: bool = False
+    revalidated_not_modified: bool = False
     error: str | None = None
 
 
@@ -80,6 +82,7 @@ class Crawler:
         max_depth: int,
         same_origin: bool,
         refresh_after_s: int = 0,
+        conditional_revalidate_leaves: bool = False,
     ) -> list[CrawlOutcome]:
         queue: deque[tuple[str, int]] = deque()
         allowed_origins: set[tuple[str, str, int | None]] = set()
@@ -100,8 +103,79 @@ class Crawler:
                 continue
             visited.add(url)
 
+            revalidation: RevalidationIndexHit | None = None
+            leaf_revalidation_enabled = (
+                conditional_revalidate_leaves
+                and refresh_after_s > 0
+                and depth >= max_depth
+            )
+            if leaf_revalidation_enabled:
+                revalidation = await self.indexer.revalidation_document(url)
+                if revalidation is not None and revalidation.age_s < refresh_after_s:
+                    try:
+                        await self.fetcher.ensure_fetch_allowed(url)
+                    except UnsafeUrlError as exc:
+                        outcomes.append(
+                            CrawlOutcome(
+                                url=url,
+                                depth=depth,
+                                indexed=False,
+                                error=f"Unsafe URL: {exc}",
+                            )
+                        )
+                        continue
+                    except FetchError as exc:
+                        outcomes.append(
+                            CrawlOutcome(
+                                url=url,
+                                depth=depth,
+                                indexed=False,
+                                error=f"Fetch failed: {exc}",
+                            )
+                        )
+                        continue
+
+                    outcomes.append(
+                        CrawlOutcome(
+                            url=url,
+                            depth=depth,
+                            indexed=False,
+                            document_id=revalidation.document_id,
+                            content_hash=revalidation.content_hash,
+                            freshness_skipped=True,
+                            freshness_age_s=revalidation.age_s,
+                            network_fetch_skipped=True,
+                        )
+                    )
+                    continue
+
             try:
-                fetched = await self.fetcher.fetch_html(url)
+                if revalidation is not None and revalidation.has_validator:
+                    fetched = await self.fetcher.fetch_html(
+                        url,
+                        if_none_match=revalidation.etag,
+                        if_modified_since=revalidation.last_modified,
+                    )
+                    if fetched.not_modified:
+                        touched = await self.indexer.touch_revalidated_document(
+                            revalidation,
+                            fetched,
+                        )
+                        if touched:
+                            outcomes.append(
+                                CrawlOutcome(
+                                    url=fetched.final_url,
+                                    depth=depth,
+                                    indexed=False,
+                                    document_id=revalidation.document_id,
+                                    content_hash=revalidation.content_hash,
+                                    revalidated_not_modified=True,
+                                )
+                            )
+                            continue
+                        fetched = await self.fetcher.fetch_html(url)
+                else:
+                    fetched = await self.fetcher.fetch_html(url)
             except UnsafeUrlError as exc:
                 outcomes.append(
                     CrawlOutcome(

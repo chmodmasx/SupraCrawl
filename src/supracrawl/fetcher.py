@@ -21,6 +21,9 @@ class FetchResult:
     content_type: str
     html: str
     fetched_at: str
+    etag: str | None = None
+    last_modified: str | None = None
+    not_modified: bool = False
 
 
 class HttpFetcher:
@@ -28,7 +31,20 @@ class HttpFetcher:
         self.settings = settings
         self.robots = robots or RobotsPolicy()
 
-    async def fetch_html(self, url: str) -> FetchResult:
+    async def ensure_fetch_allowed(self, url: str) -> None:
+        await validate_public_url(url)
+        if self.settings.obey_robots_txt:
+            allowed = await self.robots.allowed(url, self.settings.user_agent)
+            if not allowed:
+                raise FetchError("Blocked by robots.txt")
+
+    async def fetch_html(
+        self,
+        url: str,
+        *,
+        if_none_match: str | None = None,
+        if_modified_since: str | None = None,
+    ) -> FetchResult:
         fetch_url = url
         current = url
         headers = {
@@ -43,14 +59,21 @@ class HttpFetcher:
             headers=headers,
         ) as client:
             for redirect_count in range(self.settings.max_redirects + 1):
-                await validate_public_url(current)
-                if self.settings.obey_robots_txt:
-                    allowed = await self.robots.allowed(current, self.settings.user_agent)
-                    if not allowed:
-                        raise FetchError("Blocked by robots.txt")
+                await self.ensure_fetch_allowed(current)
+
+                request_headers: dict[str, str] = {}
+                if redirect_count == 0:
+                    if if_none_match:
+                        request_headers["If-None-Match"] = if_none_match
+                    if if_modified_since:
+                        request_headers["If-Modified-Since"] = if_modified_since
 
                 try:
-                    async with client.stream("GET", current) as response:
+                    async with client.stream(
+                        "GET",
+                        current,
+                        headers=request_headers or None,
+                    ) as response:
                         if response.status_code in {301, 302, 303, 307, 308}:
                             location = response.headers.get("location")
                             if not location:
@@ -59,6 +82,23 @@ class HttpFetcher:
                                 raise FetchError("Maximum redirect count exceeded")
                             current = urljoin(current, location)
                             continue
+
+                        if response.status_code == 304:
+                            if not request_headers:
+                                raise FetchError("Unexpected HTTP 304 without conditional request")
+                            return FetchResult(
+                                fetch_url=fetch_url,
+                                final_url=current,
+                                status_code=304,
+                                content_type="",
+                                html="",
+                                fetched_at=datetime.now(UTC).isoformat(),
+                                etag=response.headers.get("etag") or if_none_match,
+                                last_modified=(
+                                    response.headers.get("last-modified") or if_modified_since
+                                ),
+                                not_modified=True,
+                            )
 
                         if response.status_code >= 400:
                             raise FetchError(f"HTTP {response.status_code}")
@@ -100,6 +140,8 @@ class HttpFetcher:
                             content_type=content_type,
                             html=html,
                             fetched_at=datetime.now(UTC).isoformat(),
+                            etag=response.headers.get("etag"),
+                            last_modified=response.headers.get("last-modified"),
                         )
                 except UnsafeUrlError:
                     raise

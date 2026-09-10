@@ -33,6 +33,20 @@ class FreshIndexHit:
     age_s: float
 
 
+@dataclass(frozen=True, slots=True)
+class RevalidationIndexHit:
+    document_id: str
+    content_hash: str
+    fetched_at: str
+    age_s: float
+    etag: str | None = None
+    last_modified: str | None = None
+
+    @property
+    def has_validator(self) -> bool:
+        return bool(self.etag or self.last_modified)
+
+
 class Indexer:
     def __init__(
         self,
@@ -63,20 +77,23 @@ class Indexer:
 
         return await self.index_extraction(fetched, extraction)
 
-    async def fresh_document(
+    async def revalidation_document(
         self,
         url: str,
-        refresh_after_s: int,
         *,
         now: datetime | None = None,
-    ) -> FreshIndexHit | None:
-        if refresh_after_s <= 0:
-            return None
-
+    ) -> RevalidationIndexHit | None:
         body = {
             "size": 1,
             "track_total_hits": False,
-            "_source": ["document_id", "content_hash", "fetched_at", "url"],
+            "_source": [
+                "document_id",
+                "content_hash",
+                "fetched_at",
+                "url",
+                "etag",
+                "last_modified",
+            ],
             "query": {"term": {"url": url}},
             "sort": [{"fetched_at": {"order": "desc"}}],
         }
@@ -130,15 +147,103 @@ class Indexer:
             0.0,
             (current.astimezone(UTC) - indexed_at.astimezone(UTC)).total_seconds(),
         )
-        if age_s >= refresh_after_s:
-            return None
 
-        return FreshIndexHit(
+        etag = source.get("etag")
+        last_modified = source.get("last_modified")
+        return RevalidationIndexHit(
             document_id=document_id,
             content_hash=digest,
             fetched_at=fetched_at,
             age_s=round(age_s, 3),
+            etag=etag if isinstance(etag, str) and etag else None,
+            last_modified=(
+                last_modified if isinstance(last_modified, str) and last_modified else None
+            ),
         )
+
+    async def fresh_document(
+        self,
+        url: str,
+        refresh_after_s: int,
+        *,
+        now: datetime | None = None,
+    ) -> FreshIndexHit | None:
+        if refresh_after_s <= 0:
+            return None
+
+        hit = await self.revalidation_document(url, now=now)
+        if hit is None or hit.age_s >= refresh_after_s:
+            return None
+
+        return FreshIndexHit(
+            document_id=hit.document_id,
+            content_hash=hit.content_hash,
+            fetched_at=hit.fetched_at,
+            age_s=hit.age_s,
+        )
+
+    async def touch_revalidated_document(
+        self,
+        hit: RevalidationIndexHit,
+        fetched: FetchResult,
+    ) -> bool:
+        if not fetched.not_modified or fetched.status_code != 304:
+            return False
+
+        doc = {
+            "fetched_at": fetched.fetched_at,
+            "http_status": fetched.status_code,
+        }
+        if fetched.etag:
+            doc["etag"] = fetched.etag
+        if fetched.last_modified:
+            doc["last_modified"] = fetched.last_modified
+
+        try:
+            await self.store.ensure_indices()
+            response = await self.store._request_with_index_recovery(
+                "POST",
+                f"/{self.settings.opensearch_documents_index}/_update/{hit.document_id}"
+                "?refresh=wait_for",
+                json={"doc": doc},
+            )
+        except SearchBackendError:
+            return False
+        return response.status_code < 400
+
+    async def _persist_http_validators(self, document_id: str, fetched: FetchResult) -> None:
+        doc: dict[str, str] = {}
+        if fetched.etag:
+            doc["etag"] = fetched.etag
+        if fetched.last_modified:
+            doc["last_modified"] = fetched.last_modified
+        if not doc:
+            return
+
+        mapping = {
+            "properties": {
+                "etag": {"type": "keyword", "ignore_above": 2048},
+                "last_modified": {"type": "keyword", "ignore_above": 2048},
+            }
+        }
+        try:
+            response = await self.store._request(
+                "PUT",
+                f"/{self.settings.opensearch_documents_index}/_mapping",
+                json=mapping,
+            )
+            if response.status_code >= 400:
+                return
+            response = await self.store._request_with_index_recovery(
+                "POST",
+                f"/{self.settings.opensearch_documents_index}/_update/{document_id}"
+                "?refresh=wait_for",
+                json={"doc": doc},
+            )
+            if response.status_code >= 400:
+                return
+        except SearchBackendError:
+            return
 
     async def index_extraction(
         self,
@@ -172,6 +277,8 @@ class Indexer:
                 content_hash=digest,
                 error=str(exc),
             )
+
+        await self._persist_http_validators(doc_id, fetched)
 
         vector_indexed: bool | None = None
         vector_chunks_indexed = 0
