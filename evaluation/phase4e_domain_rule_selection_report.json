@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "phase": "4E",
+  "decision": "PASS_DOMAIN_RULE_SELECTION_GATE",
+  "base_certified_sha": "339815fb2e1dcec784f87335499445098264c655",
+  "policy_sha": "4f688d6983a209b2cee6e5dd378450e6b53ab559",
+  "certified_evaluation_candidate_sha": "baf1865560a8970d7d6563aae5742b1a33287ea4",
+  "fixture_file_sha256": "73cfd08bc65846247964882c2cd3d54d34e5e98bff36840f6d46865e050c0fbd",
+  "engine": {
+    "readability": "0.6.0",
+    "jsdom": "26.1.0",
+    "turndown": "7.2.4"
+  },
+  "content_selector_multiple_match_semantics": "first_in_document_order",
+  "fixture_results": {
+    "clean_control": {
+      "class": "clean_control",
+      "fixture_hashes": {
+        "static_html_sha256": "563ddaf99897e0a152b8354363d76264322de426dfcef06366cdb3889141bac1",
+        "rendered_html_sha256": "563ddaf99897e0a152b8354363d76264322de426dfcef06366cdb3889141bac1"
+      },
+      "baseline": {
+        "output": {
+          "title": "Control",
+          "markdown": "## Control article\n\nPHASE4E\\_CONTROL\\_REQUIRED alpha beta gamma delta epsilon zeta eta theta.\n\nStable control paragraph for byte-equivalence verification.",
+          "text": "Control articlePHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.Stable control paragraph for byte-equivalence verification."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+      },
+      "candidates": {
+        "remove_selectors": {
+          "output": {
+            "title": "Control",
+            "markdown": "## Control article\n\nPHASE4E\\_CONTROL\\_REQUIRED alpha beta gamma delta epsilon zeta eta theta.\n\nStable control paragraph for byte-equivalence verification.",
+            "text": "Control articlePHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.Stable control paragraph for byte-equivalence verification."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        },
+        "content_selector": {
+          "output": {
+            "title": "Control",
+            "markdown": "## Control article\n\nPHASE4E\\_CONTROL\\_REQUIRED alpha beta gamma delta epsilon zeta eta theta.\n\nStable control paragraph for byte-equivalence verification.",
+            "text": "Control articlePHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.Stable control paragraph for byte-equivalence verification."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        },
+        "force_browser": {
+          "output": {
+            "title": "Control",
+            "markdown": "## Control article\n\nPHASE4E\\_CONTROL\\_REQUIRED alpha beta gamma delta epsilon zeta eta theta.\n\nStable control paragraph for byte-equivalence verification.",
+            "text": "Control articlePHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.Stable control paragraph for byte-equivalence verification."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        }
+      }
+    },
+    "boilerplate_pollution": {
+      "class": "boilerplate_pollution",
+      "fixture_hashes": {
+        "static_html_sha256": "d89fa4dcf2969f12e4390acf4792d2142b9eddef1fc8ce453f649cb801f83d85",
+        "rendered_html_sha256": "d89fa4dcf2969f12e4390acf4792d2142b9eddef1fc8ce453f649cb801f83d85"
+      },
+      "baseline": {
+        "output": {
+          "title": "Polluted story",
+          "markdown": "PHASE4E\\_BOILER\\_REQUIRED\\_A useful article opening with enough prose for readability extraction.\n\nPHASE4E\\_BOILER\\_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.\n\nMore useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.\n\nPHASE4E\\_BOILER\\_REQUIRED\\_B useful article ending preserved after cleanup.",
+          "text": "PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4E_BOILER_FORBIDDEN"]}
+      },
+      "candidates": {
+        "remove_selectors": {
+          "output": {
+            "title": "Polluted story",
+            "markdown": "PHASE4E\\_BOILER\\_REQUIRED\\_A useful article opening with enough prose for readability extraction.\n\nMore useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.\n\nPHASE4E\\_BOILER\\_REQUIRED\\_B useful article ending preserved after cleanup.",
+            "text": "PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        },
+        "content_selector": {
+          "output": {
+            "title": "Polluted story",
+            "markdown": "PHASE4E\\_BOILER\\_REQUIRED\\_A useful article opening with enough prose for readability extraction.\n\nPHASE4E\\_BOILER\\_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.\n\nMore useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.\n\nPHASE4E\\_BOILER\\_REQUIRED\\_B useful article ending preserved after cleanup.",
+            "text": "PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup."
+          },
+          "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4E_BOILER_FORBIDDEN"]}
+        },
+        "force_browser": {
+          "output": {
+            "title": "Polluted story",
+            "markdown": "PHASE4E\\_BOILER\\_REQUIRED\\_A useful article opening with enough prose for readability extraction.\n\nPHASE4E\\_BOILER\\_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.\n\nMore useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.\n\nPHASE4E\\_BOILER\\_REQUIRED\\_B useful article ending preserved after cleanup.",
+            "text": "PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup."
+          },
+          "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4E_BOILER_FORBIDDEN"]}
+        }
+      }
+    },
+    "nonstandard_content_root": {
+      "class": "nonstandard_content_root",
+      "fixture_hashes": {
+        "static_html_sha256": "30c568ddf858a5dfa3079b6b04eab9e39337e91f5a4a90b24432efd90c489306",
+        "rendered_html_sha256": "30c568ddf858a5dfa3079b6b04eab9e39337e91f5a4a90b24432efd90c489306"
+      },
+      "baseline": {
+        "output": {
+          "title": "Nonstandard root",
+          "markdown": "## Promoted navigation story\n\nPHASE4E\\_ROOT\\_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.\n\nMore decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.\n\nAdditional decoy paragraph to keep this subtree dominant during generic extraction.\n\n## Actual payload\n\nPHASE4E\\_ROOT\\_REQUIRED\\_A authoritative payload content lives in a nonstandard root.\n\nPHASE4E\\_ROOT\\_REQUIRED\\_B second authoritative marker proves the whole payload survives.",
+          "text": "Promoted navigation storyPHASE4E_ROOT_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.More decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.Additional decoy paragraph to keep this subtree dominant during generic extraction.Actual payloadPHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4E_ROOT_FORBIDDEN"]}
+      },
+      "candidates": {
+        "remove_selectors": {
+          "output": {
+            "title": "Nonstandard root",
+            "markdown": "## Actual payload\n\nPHASE4E\\_ROOT\\_REQUIRED\\_A authoritative payload content lives in a nonstandard root.\n\nPHASE4E\\_ROOT\\_REQUIRED\\_B second authoritative marker proves the whole payload survives.",
+            "text": "Actual payloadPHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        },
+        "content_selector": {
+          "output": {
+            "title": "Nonstandard root",
+            "markdown": "## Actual payload\n\nPHASE4E\\_ROOT\\_REQUIRED\\_A authoritative payload content lives in a nonstandard root.\n\nPHASE4E\\_ROOT\\_REQUIRED\\_B second authoritative marker proves the whole payload survives.",
+            "text": "Actual payloadPHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        },
+        "force_browser": {
+          "output": {
+            "title": "Nonstandard root",
+            "markdown": "## Promoted navigation story\n\nPHASE4E\\_ROOT\\_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.\n\nMore decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.\n\nAdditional decoy paragraph to keep this subtree dominant during generic extraction.\n\n## Actual payload\n\nPHASE4E\\_ROOT\\_REQUIRED\\_A authoritative payload content lives in a nonstandard root.\n\nPHASE4E\\_ROOT\\_REQUIRED\\_B second authoritative marker proves the whole payload survives.",
+            "text": "Promoted navigation storyPHASE4E_ROOT_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.More decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.Additional decoy paragraph to keep this subtree dominant during generic extraction.Actual payloadPHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives."
+          },
+          "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4E_ROOT_FORBIDDEN"]}
+        }
+      }
+    },
+    "static_false_positive_with_better_rendered_html": {
+      "class": "static_false_positive_with_better_rendered_html",
+      "fixture_hashes": {
+        "static_html_sha256": "3017206b6b327f2e9c51f6fcc9072c4b4c2edd73af9c3cbc3dace831d37d731d",
+        "rendered_html_sha256": "7d4377175926c75a18c0a33e5b579ca415865dd74753386c750a2489a3c3f700"
+      },
+      "baseline": {
+        "output": {
+          "title": "Static shell",
+          "markdown": "## Loading report\n\nPHASE4E\\_RENDER\\_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.\n\nStatic shell paragraph repeats descriptive words so generic extraction returns a plausible false positive.",
+          "text": "Loading reportPHASE4E_RENDER_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.Static shell paragraph repeats descriptive words so generic extraction returns a plausible false positive."
+        },
+        "score": {"pass": false, "missing_required": ["PHASE4E_RENDER_REQUIRED_A", "PHASE4E_RENDER_REQUIRED_B"], "present_forbidden": ["PHASE4E_RENDER_FORBIDDEN"]}
+      },
+      "candidates": {
+        "remove_selectors": {
+          "output": {
+            "title": "Static shell",
+            "markdown": "## Loading report\n\nPHASE4E\\_RENDER\\_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.\n\nStatic shell paragraph repeats descriptive words so generic extraction returns a plausible false positive.",
+            "text": "Loading reportPHASE4E_RENDER_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.Static shell paragraph repeats descriptive words so generic extraction returns a plausible false positive."
+          },
+          "score": {"pass": false, "missing_required": ["PHASE4E_RENDER_REQUIRED_A", "PHASE4E_RENDER_REQUIRED_B"], "present_forbidden": ["PHASE4E_RENDER_FORBIDDEN"]}
+        },
+        "content_selector": {
+          "output": {
+            "title": "Static shell",
+            "markdown": "## Loading report\n\nPHASE4E\\_RENDER\\_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.\n\nStatic shell paragraph repeats descriptive words so generic extraction returns a plausible false positive.",
+            "text": "Loading reportPHASE4E_RENDER_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.Static shell paragraph repeats descriptive words so generic extraction returns a plausible false positive."
+          },
+          "score": {"pass": false, "missing_required": ["PHASE4E_RENDER_REQUIRED_A", "PHASE4E_RENDER_REQUIRED_B"], "present_forbidden": ["PHASE4E_RENDER_FORBIDDEN"]}
+        },
+        "force_browser": {
+          "output": {
+            "title": "Hydrated report",
+            "markdown": "PHASE4E\\_RENDER\\_REQUIRED\\_A hydrated application content produced after browser rendering.\n\nPHASE4E\\_RENDER\\_REQUIRED\\_B second hydrated marker confirms the rendered body was selected.",
+            "text": "PHASE4E_RENDER_REQUIRED_A hydrated application content produced after browser rendering.PHASE4E_RENDER_REQUIRED_B second hydrated marker confirms the rendered body was selected."
+          },
+          "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+        }
+      }
+    }
+  },
+  "fail_open": {
+    "invalid_remove_selector": true,
+    "missing_remove_selector": true,
+    "invalid_content_selector": true,
+    "missing_content_selector": true,
+    "force_browser_disabled": true
+  },
+  "control_candidate_equivalence": {
+    "remove_selectors": true,
+    "content_selector": true,
+    "force_browser": true
+  },
+  "demonstrated_need": [
+    "boilerplate_pollution",
+    "nonstandard_content_root",
+    "static_false_positive_with_better_rendered_html"
+  ],
+  "primitive_coverage": {
+    "remove_selectors": ["boilerplate_pollution", "nonstandard_content_root"],
+    "content_selector": ["nonstandard_content_root"],
+    "force_browser": ["static_false_positive_with_better_rendered_html"]
+  },
+  "eligible_primitives": ["remove_selectors", "content_selector", "force_browser"],
+  "minimal_covering_sets": [["force_browser", "remove_selectors"]],
+  "selected_primitive_set": ["force_browser", "remove_selectors"],
+  "rejected_primitive_reasons": {
+    "content_selector": "redundant_under_minimum_primitive_cover"
+  },
+  "acceptance": {
+    "clean_control_baseline_passes": true,
+    "clean_control_candidates_byte_identical": true,
+    "fail_open_cases_byte_identical": true,
+    "every_target_fixture_demonstrates_baseline_need": true,
+    "every_selected_primitive_has_gain": true,
+    "selected_vocabulary_covers_all_demonstrated_need": true,
+    "pass": true
+  },
+  "certification": {
+    "workflow_total": 9,
+    "workflow_success": 9,
+    "workflow_failure": 0
+  }
+}

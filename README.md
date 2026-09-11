@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler. Phase 4E is evaluation-only: it selected `remove_selectors` plus `force_browser` as the minimum evidence-backed vocabulary for a future per-domain extraction-rule engine and changes no production extraction behavior.
 
 ## Design rules
 
@@ -72,6 +72,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Keep crawl freshness opt-in and fail open to normal reindexing when freshness cannot be established safely.
 - Allow target-page network skipping only for crawl leaves, after the same SSRF/robots admission as normal fetching, so BFS discovery semantics remain unchanged.
 - Keep scheduled refresh independently opt-in and process-local; scheduling must reuse the certified crawler rather than introduce a second fetch/index path.
+- Add per-domain extraction overrides only after a preregistered fixture demonstrates value; keep defaults neutral and invalid/missing override state fail-open to the existing extraction path.
 
 ## API
 
@@ -339,18 +340,28 @@ The certified measurement candidate `e01392c612dd66f445f84795272a8516333cc394` p
 
 The documentation/evidence-complete candidate `4cd2320cfaf93818f0559e0cf54a58aa339ea2a4` passed the complete 9/9 workflow matrix, and the merged `main` SHA `bf52c6e73e4e4d125e36729736815214df05371f` was independently certified with exactly 9/9 push workflows and zero failures.
 
-### Phase 4D — Process-local refresh scheduler — current gate
+### Phase 4D — Process-local refresh scheduler — certified
 
 Phase 4D adds independently opt-in continuous refresh orchestration without changing the crawler algorithm. A single FastAPI-lifespan-owned task per process delegates every cycle to the certified `Crawler`, starts its first cycle without an initial delay, forbids overlap by waiting for each crawl to finish, waits the full configured interval after completion or failure, contains ordinary cycle exceptions, and cancels cleanly during shutdown.
 
 The preregistered policy-only candidate `b036db5dd1cea2752a631d488643d98c865cfd2e` passed the complete 9/9 workflow matrix before implementation was accepted. The functional candidate `c20d97bfe1e021239fd8dfb410f180586ef9482c` then passed 9/9 with the scheduler default disabled and the manual `/v1/crawl` contract unchanged. The operational configuration candidate `532e7b6a66774cf112411d032a9d3173a7700a62` exposed the same opt-in settings through `.env.example` and Compose and independently passed 9/9.
 
-Phase 4D remains open until this documentation-complete head passes the complete 9-workflow matrix, the PR is merged with its exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
+The documentation-complete candidate `bfc39317792f1281011b05d17f87fd5da714414b` passed the complete 9/9 workflow matrix. PR #17 was merged using that exact head, producing `main` SHA `339815fb2e1dcec784f87335499445098264c655`, which was independently certified with exactly 9/9 push workflows and zero failures. Multi-replica leader election, persistent scheduler state and cross-process deduplication remain explicitly out of scope.
+
+### Phase 4E — Domain extraction-rule vocabulary selection — current gate
+
+Phase 4E changes no production extraction behavior. A preregistered evaluation using the same Readability/JSDOM/Turndown engine versions as the certified extractor worker measures three candidate override primitives against frozen deterministic fixtures: `remove_selectors`, `content_selector` and `force_browser`. The clean control must remain byte-for-byte identical, invalid or missing selector state must fail open, and the smallest primitive set covering every demonstrated extraction need is selected.
+
+The policy-only candidate `4f688d6983a209b2cee6e5dd378450e6b53ab559` passed the complete 9/9 workflow matrix before fixtures or an evaluator were accepted. The corrected evaluation candidate `baf1865560a8970d7d6563aae5742b1a33287ea4` then passed the complete 9/9 matrix and selected the unique minimum set `remove_selectors + force_browser`. `remove_selectors` fixed both the boilerplate-pollution and nonstandard-root fixtures; `force_browser` fixed the static-false-positive fixture. `content_selector` improved the nonstandard-root fixture but was rejected as `redundant_under_minimum_primitive_cover`. The exact evidence is frozen in `evaluation/phase4e_domain_rule_selection_report.json`.
+
+No site-specific production rules, domain matching/precedence semantics, rule configuration surface, or production worker/extractor behavior are introduced by Phase 4E. Any production rule-engine implementation must be a later separately preregistered phase and, absent new evidence, must limit its primitive vocabulary to the two selected capabilities.
+
+Phase 4E remains open until this documentation/evidence-complete head passes the complete 9-workflow matrix, PR #18 is merged with its exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
 
 ### Later measured work
 
 - distributed scheduling, leader election or cross-process deduplication only if multi-replica deployment measurements justify it;
-- per-domain extraction rules;
+- production per-domain extraction-rule implementation using only the Phase 4E-selected primitives unless new preregistered evidence justifies expanding the vocabulary;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
 - scale-specific ANN/GPU work only when corpus/load measurements require it;

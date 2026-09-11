@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -80,6 +80,15 @@ try {
   }
   if (body.markdown.includes("this script must never become model context")) {
     throw new Error("Script content leaked into extracted Markdown");
+  }
+
+  const phase4e = spawnSync(
+    process.execPath,
+    ["../../evaluation/phase4e_domain_rule_selection.mjs"],
+    { stdio: "inherit" },
+  );
+  if (phase4e.status !== 0) {
+    throw new Error(`Phase 4E evaluator failed with exit code ${phase4e.status}`);
   }
 } finally {
   if (child.exitCode === null) child.kill("SIGTERM");

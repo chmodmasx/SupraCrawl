@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "phase": "4E",
+  "gate": "phase4e-domain-extraction-rule-selection-v1",
+  "base_certified_sha": "339815fb2e1dcec784f87335499445098264c655",
+  "scope": "evaluation-only selection of the smallest justified per-domain extraction rule vocabulary before any production rule engine or site-specific rule is implemented",
+  "problem_statement": {
+    "current_extraction_policy": "all domains share the same Readability-first, Trafilatura-fallback and heuristic browser-escalation behavior",
+    "observed_repository_evidence": "no frozen corpus or open issue currently demonstrates a specific real-domain extraction failure",
+    "consequence": "production selector or browser override semantics must not be chosen by intuition; candidate primitives are evaluated first on deterministic failure-class fixtures"
+  },
+  "candidate_primitives": {
+    "remove_selectors": {
+      "intent": "remove configured DOM subtrees before Readability on both static and rendered HTML",
+      "missing_match_behavior": "no-op",
+      "invalid_selector_behavior": "candidate must fail open to the unmodified document during evaluation"
+    },
+    "content_selector": {
+      "intent": "restrict extraction input to a configured content subtree before Readability",
+      "missing_match_behavior": "fail open to the unmodified document",
+      "multiple_match_behavior": "candidate semantics must be deterministic and frozen by the evaluation report"
+    },
+    "force_browser": {
+      "intent": "allow an eligible domain rule to request the existing browser extraction path even when the global quality heuristic would accept static extraction",
+      "browser_disabled_behavior": "fall back to the existing static extraction result rather than making extraction fail"
+    }
+  },
+  "fixture_contract": {
+    "network_access": false,
+    "fixture_classes": [
+      "clean_control",
+      "boilerplate_pollution",
+      "nonstandard_content_root",
+      "static_false_positive_with_better_rendered_html"
+    ],
+    "frozen_inputs": "all HTML/static-rendered fixture pairs and expected marker sets are committed before candidate scoring",
+    "scoring": {
+      "required_markers": "100% of required content markers must survive",
+      "forbidden_markers": "0 forbidden noise markers may survive",
+      "control_equivalence": "clean_control output must remain byte-for-byte identical to the certified baseline when no rule applies"
+    }
+  },
+  "selection_contract": {
+    "primitive_eligibility": "a primitive is eligible only if it converts at least one target fixture class from failing to passing while causing zero clean-control regression",
+    "vocabulary_selection": "select the smallest set of eligible primitives that covers every fixture class demonstrated to need an override",
+    "no_value_outcome": "if no primitive produces a preregistered improvement, select no production capability and stop",
+    "report_required": true,
+    "report_must_freeze": [
+      "fixture hashes",
+      "baseline outputs",
+      "candidate outputs",
+      "marker scores",
+      "selected primitive set",
+      "rejected primitive reasons"
+    ]
+  },
+  "acceptance": {
+    "evaluation_changes_no_production_code": true,
+    "evaluation_changes_no_api_contract": true,
+    "clean_control_baseline_is_byte_identical": true,
+    "every_selected_primitive_has_a_demonstrated_fixture_gain": true,
+    "every_selected_primitive_has_zero_control_regressions": true,
+    "selected_vocabulary_is_minimal_under_the_preregistered_coverage_rule": true,
+    "invalid_or_nonmatching_rule_inputs_are_evaluated_for_fail_open_behavior": true,
+    "full_existing_9_workflow_matrix_passes_on_policy_head": true,
+    "full_existing_9_workflow_matrix_passes_on_evaluation_head": true
+  },
+  "constraints": {
+    "no_site_specific_production_rules": true,
+    "no_rule_matching_or_precedence_implementation_yet": true,
+    "no_production_extractor_change": true,
+    "no_worker_runtime_change": true,
+    "no_fetcher_or_browser_security_change": true,
+    "no_ssrf_or_robots_change": true,
+    "no_crawler_change": true,
+    "no_index_or_retrieval_change": true,
+    "no_ranking_or_reranker_change": true,
+    "no_new_api_endpoint": true,
+    "no_new_performance_threshold": true
+  }
+}
