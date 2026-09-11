@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "phase": "4C",
+  "gate": "phase4c-refresh-efficiency-v1",
+  "decision": "PASS_REFRESH_EFFICIENCY_GATE",
+  "base_certified_sha": "542820dfb5fefe05988ff57f60a81c8d0f395698",
+  "certified_measurement_candidate_sha": "e01392c612dd66f445f84795272a8516333cc394",
+  "fixture_body_bytes": 262144,
+  "measurements": {
+    "phase4a_fresh": {
+      "target_gets": 1,
+      "conditional_gets": 0,
+      "unconditional_gets": 1,
+      "response_body_bytes": 262144,
+      "extractions": 0,
+      "indexes": 0,
+      "touches": 0,
+      "freshness_skipped": true,
+      "network_fetch_skipped": false,
+      "revalidated_not_modified": false,
+      "indexed": false,
+      "error": null
+    },
+    "phase4b_fresh_leaf": {
+      "target_gets": 0,
+      "conditional_gets": 0,
+      "unconditional_gets": 0,
+      "response_body_bytes": 0,
+      "extractions": 0,
+      "indexes": 0,
+      "touches": 0,
+      "freshness_skipped": true,
+      "network_fetch_skipped": true,
+      "revalidated_not_modified": false,
+      "indexed": false,
+      "error": null
+    },
+    "phase4a_stale_unchanged": {
+      "target_gets": 1,
+      "conditional_gets": 0,
+      "unconditional_gets": 1,
+      "response_body_bytes": 262144,
+      "extractions": 1,
+      "indexes": 1,
+      "touches": 0,
+      "freshness_skipped": false,
+      "network_fetch_skipped": false,
+      "revalidated_not_modified": false,
+      "indexed": true,
+      "error": null
+    },
+    "phase4b_stale_304": {
+      "target_gets": 1,
+      "conditional_gets": 1,
+      "unconditional_gets": 0,
+      "response_body_bytes": 0,
+      "extractions": 0,
+      "indexes": 0,
+      "touches": 1,
+      "freshness_skipped": false,
+      "network_fetch_skipped": false,
+      "revalidated_not_modified": true,
+      "indexed": false,
+      "error": null
+    },
+    "phase4b_304_touch_failure": {
+      "target_gets": 2,
+      "conditional_gets": 1,
+      "unconditional_gets": 1,
+      "response_body_bytes": 262144,
+      "extractions": 1,
+      "indexes": 1,
+      "touches": 1,
+      "freshness_skipped": false,
+      "network_fetch_skipped": false,
+      "revalidated_not_modified": false,
+      "indexed": true,
+      "error": null
+    }
+  },
+  "reductions": {
+    "fresh_leaf_target_get_reduction_percent": 100.0,
+    "fresh_leaf_body_byte_reduction_percent": 100.0,
+    "stale_304_body_byte_reduction_percent": 100.0,
+    "stale_304_extraction_reduction_percent": 100.0,
+    "stale_304_index_reduction_percent": 100.0
+  },
+  "certification": {
+    "workflow_matrix_total": 9,
+    "workflow_matrix_success": 9,
+    "workflow_matrix_failure": 0
+  }
+}

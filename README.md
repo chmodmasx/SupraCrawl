@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, and Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves without changing retrieval ranking.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, and Phase 4C measures the deterministic network/indexing savings of those certified refresh paths without changing production behavior.
 
 ## Design rules
 
@@ -305,15 +305,23 @@ The exact Phase 3J code candidate `93c63330a7ef59a1934f8dc5dd6872203d1089d4` pas
 
 The preregistered code candidate `d3aa2679b94d3b26993302bd94680381c96178c7` passed the complete 9/9 workflow matrix, followed by a documentation-complete candidate and the merged `main` SHA `bf3db918b123c93301ad92ec047717c7af6c7e01`, which was independently certified with 9/9 push workflows and zero failures. Conditional GET and target-page network avoidance were intentionally deferred to the next measured phase.
 
-### Phase 4B — Leaf conditional HTTP revalidation — current gate
+### Phase 4B — Leaf conditional HTTP revalidation — certified
 
 Phase 4B adds independently opt-in `conditional_revalidate_leaves` behavior on top of the certified Phase 4A freshness baseline. Only crawl leaves are eligible, preserving full-fetch behavior on every page that can discover children. Fresh leaves may skip the target-page GET only after the same SSRF/robots admission as normal fetching succeeds; stale leaves may send persisted `ETag`/`Last-Modified` validators. Redirects discard validators, `304` refreshes the stored document timestamp without reindexing, and a failed metadata touch forces an immediate unconditional GET.
 
-The preregistered corrected code candidate `ee3ba836fd5e22b04b97eb6428bbb3c62f3d397b` passed the complete 9/9 workflow matrix after an earlier Ruff-only rejection and a voluntarily rejected security-admission candidate were excluded from evidence. Phase 4B remains open until this documentation-complete SHA and its resulting merged `main` SHA independently pass the same complete workflow matrix.
+The corrected code candidate `ee3ba836fd5e22b04b97eb6428bbb3c62f3d397b` and documentation-complete candidate `cd8a530daafe7c5a9142ece23b25176d61f88707` each passed the complete 9/9 workflow matrix. The merged `main` SHA `542820dfb5fefe05988ff57f60a81c8d0f395698` was then independently certified with exactly 9/9 push workflows and zero failures.
+
+### Phase 4C — Refresh efficiency measurement — current gate
+
+Phase 4C changes no production code. A preregistered deterministic gate compares the certified Phase 4A and Phase 4B refresh paths using a fixed 262,144-byte HTML fixture and counts target GETs, response-body bytes, extraction calls, index writes and metadata touches.
+
+The certified measurement candidate `e01392c612dd66f445f84795272a8516333cc394` passed the complete 9/9 workflow matrix. Against the preregistered fixture, an eligible fresh leaf reduced target GETs and response-body bytes by `100%`; a stale leaf returning `304 Not Modified` reduced response-body bytes, extraction work and index writes by `100%`. The touch-failure control performed one conditional GET followed by one unconditional full GET and restored extraction/indexing, proving the optimization fails back to the full path rather than accepting a false freshness result. The exact evidence is frozen in `evaluation/phase4c_refresh_efficiency_report.json`.
+
+Phase 4C remains open until this documentation/evidence-complete head and its resulting merged `main` SHA independently pass the complete historical workflow matrix. Scheduling and continuous refresh remain out of scope until that certification is complete.
 
 ### Later measured work
 
-- crawl scheduling and continuous refresh only after conditional refresh behavior is certified and measured;
+- crawl scheduling and continuous refresh only after Phase 4C is fully certified after merge;
 - per-domain extraction rules;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
