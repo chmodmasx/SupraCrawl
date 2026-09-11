@@ -90,8 +90,9 @@ function forceBrowser(fixture, enabled, browserEnabled) {
 
 function score(output, fixture) {
   const markdown = output?.markdown || "";
-  const missingRequired = fixture.required_markers.filter((marker) => !markdown.includes(marker));
-  const presentForbidden = fixture.forbidden_markers.filter((marker) => markdown.includes(marker));
+  const markerText = markdown.replace(/\\_/g, "_");
+  const missingRequired = fixture.required_markers.filter((marker) => !markerText.includes(marker));
+  const presentForbidden = fixture.forbidden_markers.filter((marker) => markerText.includes(marker));
   return {
     pass: missingRequired.length === 0 && presentForbidden.length === 0,
     missing_required: missingRequired,
