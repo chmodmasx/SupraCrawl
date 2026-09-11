@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "phase": "4D",
+  "gate": "phase4d-process-local-refresh-scheduler-v1",
+  "base_certified_sha": "bf52c6e73e4e4d125e36729736815214df05371f",
+  "scope": "independently opt-in process-local fixed-delay crawl refresh scheduling that delegates every cycle to the already certified Crawler",
+  "architecture_contract": {
+    "task_owner": "FastAPI lifespan",
+    "execution_model": "one process-local asyncio task",
+    "first_run": "immediate after enabled startup",
+    "recurrence": "sleep the configured interval only after the preceding cycle completes or fails",
+    "overlap_allowed": false,
+    "crawler_reused_without_scheduler_specific_fetch_or_index_logic": true,
+    "cycle_exception_behavior": "contain the exception and continue scheduling later cycles",
+    "shutdown_behavior": "cancel and await the scheduler task without starting another cycle"
+  },
+  "configuration_contract": {
+    "enabled": {
+      "field": "crawl_scheduler_enabled",
+      "default": false
+    },
+    "seeds": {
+      "field": "crawl_scheduler_seeds",
+      "default": [],
+      "enabled_requires_non_empty": true
+    },
+    "interval_s": {
+      "field": "crawl_scheduler_interval_s",
+      "default": 21600,
+      "minimum": 60
+    },
+    "crawl_policy": {
+      "max_pages_field": "crawl_scheduler_max_pages",
+      "max_pages_default": 25,
+      "max_depth_field": "crawl_scheduler_max_depth",
+      "max_depth_default": 1,
+      "same_origin_field": "crawl_scheduler_same_origin",
+      "same_origin_default": true,
+      "refresh_after_s_field": "crawl_scheduler_refresh_after_s",
+      "refresh_after_s_default": 21600,
+      "conditional_revalidate_leaves_field": "crawl_scheduler_conditional_revalidate_leaves",
+      "conditional_revalidate_leaves_default": true
+    }
+  },
+  "acceptance": {
+    "disabled_default_creates_no_scheduler_task": true,
+    "disabled_default_makes_zero_scheduler_crawler_calls": true,
+    "enabled_configuration_requires_at_least_one_seed": true,
+    "enabled_startup_runs_exactly_one_immediate_cycle": true,
+    "cycle_arguments_match_configured_scheduler_policy_exactly": true,
+    "second_cycle_cannot_start_before_first_cycle_completes": true,
+    "next_cycle_waits_full_interval_after_prior_completion": true,
+    "cycle_exception_does_not_terminate_future_scheduling": true,
+    "shutdown_cancellation_stops_future_cycles_cleanly": true,
+    "scheduled_cycles_preserve_existing_crawler_ssrf_robots_bfs_freshness_and_revalidation_paths": true,
+    "manual_v1_crawl_request_and_response_contract_unchanged": true
+  },
+  "constraints": {
+    "ranking_behavior_unchanged": true,
+    "reranker_behavior_unchanged": true,
+    "retrieval_behavior_unchanged": true,
+    "crawler_algorithm_unchanged": true,
+    "ssrf_and_robots_policy_unchanged": true,
+    "phase4a_freshness_semantics_unchanged": true,
+    "phase4b_conditional_revalidation_semantics_unchanged": true,
+    "no_persistent_scheduler_state": true,
+    "no_distributed_leader_election": true,
+    "no_cross_process_deduplication": true,
+    "no_new_api_endpoint": true,
+    "no_existing_workflow_change": true,
+    "no_new_performance_or_latency_threshold": true
+  }
+}

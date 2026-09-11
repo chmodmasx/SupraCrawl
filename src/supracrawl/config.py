@@ -1,7 +1,7 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,6 +55,26 @@ class Settings(BaseSettings):
     # Phase 3H operational capability. Backpressure is independently opt-in so
     # the exact Phase 3G canary behavior remains reproducible.
     reranker_backpressure_enabled: bool = False
+
+    # Phase 4D operational capability. The scheduler is process-local and
+    # independently opt-in; every cycle delegates to the certified Crawler.
+    crawl_scheduler_enabled: bool = False
+    crawl_scheduler_seeds: list[HttpUrl] = Field(default_factory=list, max_length=10)
+    crawl_scheduler_interval_s: int = Field(default=21_600, ge=60, le=2_592_000)
+    crawl_scheduler_max_pages: int = Field(default=25, ge=1, le=100)
+    crawl_scheduler_max_depth: int = Field(default=1, ge=0, le=3)
+    crawl_scheduler_same_origin: bool = True
+    crawl_scheduler_refresh_after_s: int = Field(default=21_600, ge=0, le=2_592_000)
+    crawl_scheduler_conditional_revalidate_leaves: bool = True
+
+    @model_validator(mode="after")
+    def validate_crawl_scheduler(self) -> Self:
+        if self.crawl_scheduler_enabled and not self.crawl_scheduler_seeds:
+            raise ValueError(
+                "crawl_scheduler_seeds must contain at least one URL when "
+                "crawl_scheduler_enabled is true"
+            )
+        return self
 
 
 @lru_cache
