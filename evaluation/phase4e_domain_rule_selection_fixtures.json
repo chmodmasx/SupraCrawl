@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "phase": "4E",
+  "fixtures": [
+    {
+      "id": "clean_control",
+      "class": "clean_control",
+      "url": "https://control.example/article",
+      "static_html": "<!doctype html><html><head><title>Control</title></head><body><article><h1>Control article</h1><p>PHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.</p><p>Stable control paragraph for byte-equivalence verification.</p></article><script>PHASE4E_CONTROL_FORBIDDEN</script></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Control</title></head><body><article><h1>Control article</h1><p>PHASE4E_CONTROL_REQUIRED alpha beta gamma delta epsilon zeta eta theta.</p><p>Stable control paragraph for byte-equivalence verification.</p></article><script>PHASE4E_CONTROL_FORBIDDEN</script></body></html>",
+      "required_markers": ["PHASE4E_CONTROL_REQUIRED"],
+      "forbidden_markers": ["PHASE4E_CONTROL_FORBIDDEN"],
+      "rules": {
+        "remove_selectors": [".does-not-exist"],
+        "content_selector": ".does-not-exist",
+        "force_browser": true
+      }
+    },
+    {
+      "id": "boilerplate_pollution",
+      "class": "boilerplate_pollution",
+      "url": "https://boilerplate.example/story",
+      "static_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"cookie-banner\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"cookie-banner\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
+      "required_markers": ["PHASE4E_BOILER_REQUIRED_A", "PHASE4E_BOILER_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4E_BOILER_FORBIDDEN"],
+      "rules": {
+        "remove_selectors": [".cookie-banner"],
+        "content_selector": "article",
+        "force_browser": true
+      }
+    },
+    {
+      "id": "nonstandard_content_root",
+      "class": "nonstandard_content_root",
+      "url": "https://root.example/page",
+      "static_html": "<!doctype html><html><head><title>Nonstandard root</title></head><body><article class=\"decoy\"><h1>Promoted navigation story</h1><p>PHASE4E_ROOT_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.</p><p>More decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.</p><p>Additional decoy paragraph to keep this subtree dominant during generic extraction.</p></article><div id=\"main-payload\"><h2>Actual payload</h2><p>PHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.</p><p>PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives.</p></div></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Nonstandard root</title></head><body><article class=\"decoy\"><h1>Promoted navigation story</h1><p>PHASE4E_ROOT_FORBIDDEN decoy text repeated across a long promoted block to attract the generic readability heuristic. Decoy content remains intentionally verbose and coherent.</p><p>More decoy prose with recommendations, promotions, related links and repeated explanatory text that should not become the selected page body.</p><p>Additional decoy paragraph to keep this subtree dominant during generic extraction.</p></article><div id=\"main-payload\"><h2>Actual payload</h2><p>PHASE4E_ROOT_REQUIRED_A authoritative payload content lives in a nonstandard root.</p><p>PHASE4E_ROOT_REQUIRED_B second authoritative marker proves the whole payload survives.</p></div></body></html>",
+      "required_markers": ["PHASE4E_ROOT_REQUIRED_A", "PHASE4E_ROOT_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4E_ROOT_FORBIDDEN"],
+      "rules": {
+        "remove_selectors": [".decoy"],
+        "content_selector": "#main-payload",
+        "force_browser": true
+      }
+    },
+    {
+      "id": "static_false_positive_with_better_rendered_html",
+      "class": "static_false_positive_with_better_rendered_html",
+      "url": "https://render.example/app",
+      "static_html": "<!doctype html><html><head><title>Static shell</title></head><body><article><h1>Loading report</h1><p>PHASE4E_RENDER_FORBIDDEN static placeholder content is coherent enough to look extractable but is not the hydrated report.</p><p>Static shell paragraph repeats descriptive words so generic extraction returns a plausible false positive.</p></article></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Hydrated report</title></head><body><article><h1>Hydrated report</h1><p>PHASE4E_RENDER_REQUIRED_A hydrated application content produced after browser rendering.</p><p>PHASE4E_RENDER_REQUIRED_B second hydrated marker confirms the rendered body was selected.</p></article></body></html>",
+      "required_markers": ["PHASE4E_RENDER_REQUIRED_A", "PHASE4E_RENDER_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4E_RENDER_FORBIDDEN"],
+      "rules": {
+        "remove_selectors": [".does-not-exist"],
+        "content_selector": "article",
+        "force_browser": true
+      }
+    }
+  ],
+  "fail_open_cases": {
+    "invalid_remove_selector": "[",
+    "missing_remove_selector": ".phase4e-missing",
+    "invalid_content_selector": "[",
+    "missing_content_selector": ".phase4e-missing"
+  },
+  "content_selector_multiple_match_semantics": "first_in_document_order"
+}
