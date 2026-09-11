@@ -20,12 +20,12 @@
       "id": "boilerplate_pollution",
       "class": "boilerplate_pollution",
       "url": "https://boilerplate.example/story",
-      "static_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"cookie-banner\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
-      "rendered_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"cookie-banner\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
+      "static_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"phase4e-noise-x\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4E_BOILER_REQUIRED_A useful article opening with enough prose for readability extraction.</p><div class=\"phase4e-noise-x\"><p>PHASE4E_BOILER_FORBIDDEN cookie privacy consent marketing preferences repeated noise repeated noise repeated noise.</p></div><p>More useful article prose discussing deterministic extraction behavior and stable evaluation fixtures.</p><p>PHASE4E_BOILER_REQUIRED_B useful article ending preserved after cleanup.</p></article></body></html>",
       "required_markers": ["PHASE4E_BOILER_REQUIRED_A", "PHASE4E_BOILER_REQUIRED_B"],
       "forbidden_markers": ["PHASE4E_BOILER_FORBIDDEN"],
       "rules": {
-        "remove_selectors": [".cookie-banner"],
+        "remove_selectors": [".phase4e-noise-x"],
         "content_selector": "article",
         "force_browser": true
       }
