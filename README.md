@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, and Phase 4C measures the deterministic network/indexing savings of those certified refresh paths without changing production behavior.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler.
 
 ## Design rules
 
@@ -71,6 +71,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Keep liveness cheap and independent from dependency health; use readiness for serving-path admission decisions.
 - Keep crawl freshness opt-in and fail open to normal reindexing when freshness cannot be established safely.
 - Allow target-page network skipping only for crawl leaves, after the same SSRF/robots admission as normal fetching, so BFS discovery semantics remain unchanged.
+- Keep scheduled refresh independently opt-in and process-local; scheduling must reuse the certified crawler rather than introduce a second fetch/index path.
 
 ## API
 
@@ -106,7 +107,24 @@ Phase 4B adds `conditional_revalidate_leaves`, independently opt-in and `false` 
 
 For an eligible fresh leaf, SupraCrawl first performs the same public-URL and `robots.txt` admission used by normal fetching; only after that admission succeeds may it skip the target-page GET. Such pages set `network_fetch_skipped: true` and contribute to `pages_network_skipped_fresh`. A stale leaf with persisted `ETag` and/or `Last-Modified` sends `If-None-Match` / `If-Modified-Since`. Conditional validators are dropped before following redirects.
 
-An HTTP `304 Not Modified` skips extraction and lexical/vector reindexing and refreshes the stored document timestamp. It is reported with `revalidated_not_modified: true` and contributes to `pages_revalidated_not_modified`. If the metadata touch fails, SupraCrawl immediately performs an unconditional full GET and resumes the normal extraction/indexing path. Conditional `200` responses also continue through the normal path. Missing validators, lookup failures, or best-effort validator-persistence failures never make crawling fail closed. Scheduling remains out of scope.
+An HTTP `304 Not Modified` skips extraction and lexical/vector reindexing and refreshes the stored document timestamp. It is reported with `revalidated_not_modified: true` and contributes to `pages_revalidated_not_modified`. If the metadata touch fails, SupraCrawl immediately performs an unconditional full GET and resumes the normal extraction/indexing path. Conditional `200` responses also continue through the normal path. Missing validators, lookup failures, or best-effort validator-persistence failures never make crawling fail closed.
+
+Phase 4D can schedule those same crawl semantics without adding a new endpoint or a scheduler-specific fetch path. Scheduling is disabled by default. When enabled, one `asyncio` task per API process runs an immediate crawl cycle and then waits the configured interval **after the cycle finishes or fails** before starting the next cycle, so cycles do not overlap. A cycle exception is logged and contained; later cycles continue. Application shutdown cancels and awaits the task before closing shared resources.
+
+Scheduler configuration:
+
+```text
+SUPRACRAWL_CRAWL_SCHEDULER_ENABLED=false
+SUPRACRAWL_CRAWL_SCHEDULER_SEEDS=[]
+SUPRACRAWL_CRAWL_SCHEDULER_INTERVAL_S=21600
+SUPRACRAWL_CRAWL_SCHEDULER_MAX_PAGES=25
+SUPRACRAWL_CRAWL_SCHEDULER_MAX_DEPTH=1
+SUPRACRAWL_CRAWL_SCHEDULER_SAME_ORIGIN=true
+SUPRACRAWL_CRAWL_SCHEDULER_REFRESH_AFTER_S=21600
+SUPRACRAWL_CRAWL_SCHEDULER_CONDITIONAL_REVALIDATE_LEAVES=true
+```
+
+`SUPRACRAWL_CRAWL_SCHEDULER_SEEDS` is a JSON list of absolute HTTP(S) URLs. Enabling the scheduler with an empty seed list is rejected at settings validation. The minimum scheduler interval is 60 seconds. Because Phase 4D is intentionally process-local, enabling it in multiple API replicas causes each replica to schedule its own cycles; Phase 4D provides no distributed leader election, persistent scheduler state, or cross-process deduplication.
 
 ### Search
 
@@ -225,6 +243,8 @@ The standard Compose API does not bundle or enable the optional reranker runtime
 
 For orchestration, use `/v1/health` as liveness and `/v1/ready` as the traffic-admission readiness probe. A process may remain live while readiness returns `503` if a required serving dependency is unavailable.
 
+The Compose file exposes the Phase 4D scheduler settings but keeps scheduling disabled by default. To enable it, provide a non-empty JSON seed list and explicitly set `SUPRACRAWL_CRAWL_SCHEDULER_ENABLED=true`.
+
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
 ## Hermes
@@ -311,17 +331,25 @@ Phase 4B adds independently opt-in `conditional_revalidate_leaves` behavior on t
 
 The corrected code candidate `ee3ba836fd5e22b04b97eb6428bbb3c62f3d397b` and documentation-complete candidate `cd8a530daafe7c5a9142ece23b25176d61f88707` each passed the complete 9/9 workflow matrix. The merged `main` SHA `542820dfb5fefe05988ff57f60a81c8d0f395698` was then independently certified with exactly 9/9 push workflows and zero failures.
 
-### Phase 4C — Refresh efficiency measurement — current gate
+### Phase 4C — Refresh efficiency measurement — certified
 
 Phase 4C changes no production code. A preregistered deterministic gate compares the certified Phase 4A and Phase 4B refresh paths using a fixed 262,144-byte HTML fixture and counts target GETs, response-body bytes, extraction calls, index writes and metadata touches.
 
 The certified measurement candidate `e01392c612dd66f445f84795272a8516333cc394` passed the complete 9/9 workflow matrix. Against the preregistered fixture, an eligible fresh leaf reduced target GETs and response-body bytes by `100%`; a stale leaf returning `304 Not Modified` reduced response-body bytes, extraction work and index writes by `100%`. The touch-failure control performed one conditional GET followed by one unconditional full GET and restored extraction/indexing, proving the optimization fails back to the full path rather than accepting a false freshness result. The exact evidence is frozen in `evaluation/phase4c_refresh_efficiency_report.json`.
 
-Phase 4C remains open until this documentation/evidence-complete head and its resulting merged `main` SHA independently pass the complete historical workflow matrix. Scheduling and continuous refresh remain out of scope until that certification is complete.
+The documentation/evidence-complete candidate `4cd2320cfaf93818f0559e0cf54a58aa339ea2a4` passed the complete 9/9 workflow matrix, and the merged `main` SHA `bf52c6e73e4e4d125e36729736815214df05371f` was independently certified with exactly 9/9 push workflows and zero failures.
+
+### Phase 4D — Process-local refresh scheduler — current gate
+
+Phase 4D adds independently opt-in continuous refresh orchestration without changing the crawler algorithm. A single FastAPI-lifespan-owned task per process delegates every cycle to the certified `Crawler`, starts its first cycle without an initial delay, forbids overlap by waiting for each crawl to finish, waits the full configured interval after completion or failure, contains ordinary cycle exceptions, and cancels cleanly during shutdown.
+
+The preregistered policy-only candidate `b036db5dd1cea2752a631d488643d98c865cfd2e` passed the complete 9/9 workflow matrix before implementation was accepted. The functional candidate `c20d97bfe1e021239fd8dfb410f180586ef9482c` then passed 9/9 with the scheduler default disabled and the manual `/v1/crawl` contract unchanged. The operational configuration candidate `532e7b6a66774cf112411d032a9d3173a7700a62` exposed the same opt-in settings through `.env.example` and Compose and independently passed 9/9.
+
+Phase 4D remains open until this documentation-complete head passes the complete 9-workflow matrix, the PR is merged with its exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
 
 ### Later measured work
 
-- crawl scheduling and continuous refresh only after Phase 4C is fully certified after merge;
+- distributed scheduling, leader election or cross-process deduplication only if multi-replica deployment measurements justify it;
 - per-domain extraction rules;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
