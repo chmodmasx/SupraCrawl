@@ -35,6 +35,7 @@ from .observability import SearchMetrics
 from .readiness import READINESS_SCHEMA_VERSION, ReadinessChecker
 from .reranking import ControlledRerankingSearchService, LocalCrossEncoderReranker
 from .retrieval import SearchService
+from .scheduler import RefreshScheduler
 from .search import OpenSearchStore, SearchBackendError
 from .security import UnsafeUrlError
 
@@ -62,6 +63,7 @@ search_metrics = SearchMetrics()
 readiness_checker = ReadinessChecker(settings, search_store, dense_embedder)
 indexer = Indexer(settings, extractor, search_store, embedder=dense_embedder)
 crawler = Crawler(fetcher, extractor, indexer)
+refresh_scheduler = RefreshScheduler(crawler, settings)
 
 
 @asynccontextmanager
@@ -69,8 +71,10 @@ async def lifespan(_: FastAPI):
     try:
         if settings.reranker_enabled and settings.reranker_warmup_on_startup:
             await reranker.warmup()
+        refresh_scheduler.start()
         yield
     finally:
+        await refresh_scheduler.stop()
         await cache.close()
         await search_store.close()
 
