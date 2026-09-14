@@ -158,6 +158,15 @@ try {
   if (phase4e.status !== 0) {
     throw new Error(`Phase 4E evaluator failed with exit code ${phase4e.status}`);
   }
+
+  const phase4g = spawnSync(
+    process.execPath,
+    ["../../evaluation/phase4g_domain_rule_admission.mjs"],
+    { stdio: "inherit" },
+  );
+  if (phase4g.status !== 0) {
+    throw new Error(`Phase 4G evaluator failed with exit code ${phase4g.status}`);
+  }
 } finally {
   if (child.exitCode === null) child.kill("SIGTERM");
 }

@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "phase": "4G",
+  "gate": "phase4g-domain-rule-admission-v1",
+  "base_certified_sha": "9ec6e9aae85dac6d68c7877d6385fa8ad4db64f5",
+  "scope": "evaluation-only reusable admission gate for future exact-host extraction rules using only the certified Phase 4F primitives; Phase 4G itself admits no production site-specific rule",
+  "problem_statement": {
+    "certified_capability": "Phase 4F provides an empty-by-default exact-host rule engine supporting only remove_selectors and force_browser",
+    "repository_evidence": "there are no open repository issues or frozen real-domain failure bundles that justify enabling a production site-specific rule",
+    "risk": "adding host entries directly to production configuration without frozen before/after evidence could hide regressions, overfit transient markup, or bypass the project's evidence-first rule",
+    "phase4g_response": "define and certify a deterministic evidence format and evaluator that can admit or reject future rule candidates without changing production extraction behavior"
+  },
+  "admission_bundle_contract": {
+    "network_access_during_scoring": false,
+    "one_bundle_per_exact_host": true,
+    "host_semantics": "the candidate host must satisfy the certified Phase 4F exact normalized DNS-host validation; wildcard, suffix, IP-literal, scheme, port, path and credential forms are invalid",
+    "candidate_rule_vocabulary": [
+      "remove_selectors",
+      "force_browser"
+    ],
+    "content_selector_allowed": false,
+    "required_bundle_fields": [
+      "bundle_id",
+      "host",
+      "failure_class",
+      "candidate_rule",
+      "static_html",
+      "required_markers",
+      "forbidden_markers"
+    ],
+    "optional_bundle_fields": [
+      "rendered_html",
+      "notes",
+      "source_metadata"
+    ],
+    "frozen_input_rule": "all fixture HTML, marker sets, candidate rule values and source metadata are committed before the evaluator scores that bundle",
+    "hashing": "the report must freeze SHA-256 hashes for every static and rendered HTML input and for the canonicalized bundle definition"
+  },
+  "scoring_contract": {
+    "baseline": "run the certified Readability/Turndown extraction semantics with no site-specific rule",
+    "candidate": "run the same extraction semantics with exactly the bundle's candidate rule and no other site rule",
+    "required_markers": "100% of preregistered required markers must survive candidate extraction",
+    "forbidden_markers": "0 preregistered forbidden markers may survive candidate extraction",
+    "demonstrated_need": "the no-rule baseline must fail at least one preregistered marker condition; a bundle whose baseline already passes is rejected as no demonstrated need",
+    "strict_improvement": "the candidate must convert the target bundle from fail to pass under the same marker contract",
+    "rendered_requirement": "a force_browser candidate requires a frozen rendered_html input and must demonstrate that the rendered candidate passes where the static baseline fails",
+    "remove_selector_requirement": "a remove_selectors candidate must demonstrate that configured removal causes the passing candidate result; a missing-match no-op cannot justify admission",
+    "invalid_selector_behavior": "invalid selector state must remain baseline-equivalent rather than produce a passing admission result",
+    "combined_rule": "a rule using both primitives is admissible only if the bundle demonstrates that the combined behavior is required; if either strict subset also passes, the smaller rule must be selected",
+    "determinism": "repeated evaluation of the same frozen bundle must produce byte-identical extracted output and identical admission decision"
+  },
+  "control_contract": {
+    "clean_control_required": true,
+    "clean_control_behavior": "when the candidate host rule does not apply, output must remain byte-for-byte identical to the certified no-rule baseline",
+    "host_isolation": "the candidate rule must not apply to a parent domain, sibling domain or subdomain unless that exact normalized host is the candidate host",
+    "canonical_isolation": "rel=canonical content never changes rule admission or host matching",
+    "fail_open_controls": [
+      "invalid remove selector leaves extraction baseline-equivalent",
+      "missing remove-selector match leaves extraction baseline-equivalent",
+      "force_browser with browser capability unavailable retains static baseline behavior",
+      "render failure retains static baseline behavior"
+    ]
+  },
+  "decision_contract": {
+    "admit": "admit a future production host rule only when demonstrated_need, strict_improvement, all marker checks, minimality, determinism, host isolation and all applicable fail-open controls pass",
+    "reject": "reject on any failed prerequisite and freeze the explicit rejection reasons",
+    "no_evidence_outcome": "when no real-domain failure bundle has been preregistered, the admitted production rule set remains empty",
+    "phase4g_expected_production_rule_set": [],
+    "phase4g_changes_production_configuration": false
+  },
+  "evaluator_self_test_contract": {
+    "purpose": "prove the reusable admission protocol itself before it is trusted on future real-domain bundles",
+    "deterministic_fixture_classes": [
+      "clean_nonmatching_control",
+      "remove_selectors_admissible",
+      "force_browser_admissible",
+      "baseline_already_passes_rejected",
+      "candidate_loses_required_content_rejected",
+      "invalid_selector_rejected_and_fail_open",
+      "combined_rule_reduced_to_minimal_subset",
+      "exact_host_isolation"
+    ],
+    "reuse": "Phase 4E fixture material may be reused for protocol self-tests, but self-test fixtures are not evidence for a production site-specific rule"
+  },
+  "report_contract": {
+    "report_required": true,
+    "report_must_freeze": [
+      "base certified SHA",
+      "policy SHA",
+      "evaluator version or source hash",
+      "bundle and HTML hashes",
+      "baseline outputs",
+      "candidate outputs",
+      "marker scores",
+      "minimality result",
+      "control results",
+      "admission or rejection decision",
+      "explicit decision reasons",
+      "Phase 4G admitted production rule set"
+    ]
+  },
+  "implementation_boundaries": {
+    "evaluation_files_may_change": true,
+    "worker_smoke_may_invoke_evaluator": true,
+    "no_production_site_specific_rules": true,
+    "no_production_config_default_change": true,
+    "no_production_extractor_change": true,
+    "no_worker_runtime_change": true,
+    "no_new_rule_primitive": true,
+    "no_content_selector": true,
+    "no_wildcard_or_suffix_matching": true,
+    "no_api_contract_change": true,
+    "no_fetcher_change": true,
+    "no_browser_network_security_change": true,
+    "no_ssrf_or_robots_change": true,
+    "no_crawler_or_scheduler_change": true,
+    "no_index_or_retrieval_change": true,
+    "no_ranking_or_reranker_change": true,
+    "no_persistent_state": true,
+    "no_new_performance_threshold": true
+  },
+  "acceptance": {
+    "policy_only_head_is_certified_9_of_9_before_evaluator_work": true,
+    "evaluator_is_network_free_and_deterministic": true,
+    "self_tests_cover_positive_negative_minimality_isolation_and_fail_open_cases": true,
+    "phase4f_engine_semantics_are_not_modified": true,
+    "phase4g_admitted_production_rule_set_remains_empty": true,
+    "evaluation_head_is_certified_9_of_9_before_documentation_or_merge": true,
+    "merge_uses_exact_expected_head_sha": true,
+    "merged_main_is_independently_certified_by_exact_9_of_9_push_workflows": true
+  }
+}
