@@ -12,6 +12,8 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const browserEnabled = String(process.env.BROWSER_ENABLED || "false").toLowerCase() === "true";
 const MAX_HTML_CHARS = 6_000_000;
+const MAX_REMOVE_SELECTORS = 32;
+const MAX_SELECTOR_CHARS = 512;
 
 app.use(express.json({ limit: "7mb" }));
 
@@ -87,13 +89,41 @@ function cleanMarkdown(markdown) {
     .trim();
 }
 
-function extractReadable(html, url) {
+function normalizeRemoveSelectors(value) {
+  if (!Array.isArray(value) || value.length > MAX_REMOVE_SELECTORS) return [];
+  const selectors = [];
+  for (const item of value) {
+    if (typeof item !== "string") return [];
+    const selector = item.trim();
+    if (!selector || selector.length > MAX_SELECTOR_CHARS) return [];
+    selectors.push(selector);
+  }
+  return selectors;
+}
+
+function applyRemoveSelectors(document, selectors) {
+  if (!selectors.length) return;
+
+  let matches;
+  try {
+    matches = selectors.map((selector) => Array.from(document.querySelectorAll(selector)));
+  } catch {
+    return;
+  }
+
+  for (const elements of matches) {
+    for (const element of elements) element.remove();
+  }
+}
+
+function extractReadable(html, url, removeSelectors = []) {
   if (typeof html !== "string" || html.length === 0 || html.length > MAX_HTML_CHARS) {
     throw new Error("HTML payload is empty or exceeds the worker limit");
   }
 
   const dom = new JSDOM(html, { url });
   const document = dom.window.document;
+  applyRemoveSelectors(document, normalizeRemoveSelectors(removeSelectors));
   for (const selector of ["script", "style", "noscript", "template", "svg", "canvas", "form", "iframe"]) {
     for (const element of document.querySelectorAll(selector)) element.remove();
   }
@@ -174,7 +204,7 @@ app.post("/extract", async (req, res) => {
     // Static extraction never makes a network request. Validate URL syntax and
     // scheme, but do not perform redundant DNS resolution in this code path.
     const url = parseHttpUrl(req.body?.url);
-    const result = extractReadable(req.body?.html, url.toString());
+    const result = extractReadable(req.body?.html, url.toString(), req.body?.remove_selectors);
     res.json(result);
   } catch (error) {
     res.status(422).json({ error: String(error?.message || error) });
@@ -185,7 +215,7 @@ app.post("/render-extract", async (req, res) => {
   try {
     const url = await validatePublicUrl(req.body?.url);
     const html = await renderHtml(url.toString());
-    const result = extractReadable(html, url.toString());
+    const result = extractReadable(html, url.toString(), req.body?.remove_selectors);
     res.json(result);
   } catch (error) {
     res.status(422).json({ error: String(error?.message || error) });

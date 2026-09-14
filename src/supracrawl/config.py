@@ -1,8 +1,57 @@
+import ipaddress
+import re
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, HttpUrl, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_HOST_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+Selector = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=512),
+]
+
+
+class ExtractionDomainRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host: str
+    remove_selectors: list[Selector] = Field(default_factory=list, max_length=32)
+    force_browser: bool = False
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        host = value.rstrip(".").lower()
+        if not host or len(host) > 253:
+            raise ValueError("host must be a non-empty DNS hostname up to 253 characters")
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("IP literals are not allowed in extraction domain rules")
+        if any(not _HOST_LABEL_RE.fullmatch(label) for label in host.split(".")):
+            raise ValueError(
+                "host must be an exact DNS hostname without scheme, port, path, or wildcard"
+            )
+        return host
+
+    @model_validator(mode="after")
+    def validate_effect(self) -> Self:
+        if not self.remove_selectors and not self.force_browser:
+            raise ValueError("extraction domain rule must enable remove_selectors or force_browser")
+        return self
 
 
 class Settings(BaseSettings):
@@ -25,6 +74,10 @@ class Settings(BaseSettings):
     extractor_worker_url: str = "http://extractor-worker:3000"
     extractor_worker_timeout_s: float = Field(default=12.0, gt=0)
     browser_enabled: bool = True
+    extraction_domain_rules: list[ExtractionDomainRule] = Field(
+        default_factory=list,
+        max_length=100,
+    )
     obey_robots_txt: bool = True
 
     redis_url: str | None = "redis://redis:6379/0"
@@ -66,6 +119,13 @@ class Settings(BaseSettings):
     crawl_scheduler_same_origin: bool = True
     crawl_scheduler_refresh_after_s: int = Field(default=21_600, ge=0, le=2_592_000)
     crawl_scheduler_conditional_revalidate_leaves: bool = True
+
+    @model_validator(mode="after")
+    def validate_extraction_domain_rules(self) -> Self:
+        hosts = [rule.host for rule in self.extraction_domain_rules]
+        if len(hosts) != len(set(hosts)):
+            raise ValueError("extraction_domain_rules contains duplicate normalized hosts")
+        return self
 
     @model_validator(mode="after")
     def validate_crawl_scheduler(self) -> Self:
