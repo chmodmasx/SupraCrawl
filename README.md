@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler. Phase 4E is evaluation-only: it selected `remove_selectors` plus `force_browser` as the minimum evidence-backed vocabulary for a future per-domain extraction-rule engine and changes no production extraction behavior.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler. Phase 4E is evaluation-only and selected `remove_selectors` plus `force_browser` as the minimum evidence-backed per-domain extraction-rule vocabulary. Phase 4F implements only those two primitives in production behind an empty-by-default exact-host rule list; it adds no site-specific rules, wildcard matching, new endpoint, or extraction response schema.
 
 ## Design rules
 
@@ -73,6 +73,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Allow target-page network skipping only for crawl leaves, after the same SSRF/robots admission as normal fetching, so BFS discovery semantics remain unchanged.
 - Keep scheduled refresh independently opt-in and process-local; scheduling must reuse the certified crawler rather than introduce a second fetch/index path.
 - Add per-domain extraction overrides only after a preregistered fixture demonstrates value; keep defaults neutral and invalid/missing override state fail-open to the existing extraction path.
+- Keep production extraction-rule matching exact-host-only with unique normalized host keys; add wildcard/suffix matching or new rule primitives only after separately preregistered evidence justifies them.
 
 ## API
 
@@ -83,6 +84,18 @@ POST /v1/extract
 ```
 
 Fetches and cleans up to 10 URLs, then returns only the selected passages that fit the context budget.
+
+Phase 4F adds an optional per-host override layer without changing the endpoint or response schema. Rules are selected only from the protected fetch result's final hostname, normalized to lowercase with trailing dots removed. Matching is exact: parent-domain rules do not apply to subdomains, wildcards/suffix matching are unsupported, `rel=canonical` does not affect selection, and duplicate normalized hosts are rejected.
+
+The only supported primitives are the Phase 4E-selected `remove_selectors` and `force_browser`. `remove_selectors` applies atomically before Readability to both static and rendered HTML; if any configured CSS selector is invalid, custom selector removal fails open for that extraction. `force_browser` reuses the existing protected render path when the global browser capability is enabled; a successful forced render replaces static extraction, while browser-disabled or render-failure cases retain the existing static result.
+
+Configuration is a JSON list and defaults to empty, preserving the certified global extraction path:
+
+```text
+SUPRACRAWL_EXTRACTION_DOMAIN_RULES=[]
+```
+
+A rule must contain an exact DNS hostname and enable at least one primitive. IP literals, schemes, ports, paths, credentials, wildcards, unknown fields, duplicate normalized hosts, and no-op rules are rejected. Phase 4F ships no site-specific rule entries.
 
 ### Index
 
@@ -246,6 +259,8 @@ For orchestration, use `/v1/health` as liveness and `/v1/ready` as the traffic-a
 
 The Compose file exposes the Phase 4D scheduler settings but keeps scheduling disabled by default. To enable it, provide a non-empty JSON seed list and explicitly set `SUPRACRAWL_CRAWL_SCHEDULER_ENABLED=true`.
 
+The Compose file also exposes `SUPRACRAWL_EXTRACTION_DOMAIN_RULES` with an empty JSON-list default. Leaving it unset preserves the global extraction path; Phase 4F includes no built-in site-specific rule entries.
+
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
 ## Hermes
@@ -348,20 +363,30 @@ The preregistered policy-only candidate `b036db5dd1cea2752a631d488643d98c865cfd2
 
 The documentation-complete candidate `bfc39317792f1281011b05d17f87fd5da714414b` passed the complete 9/9 workflow matrix. PR #17 was merged using that exact head, producing `main` SHA `339815fb2e1dcec784f87335499445098264c655`, which was independently certified with exactly 9/9 push workflows and zero failures. Multi-replica leader election, persistent scheduler state and cross-process deduplication remain explicitly out of scope.
 
-### Phase 4E — Domain extraction-rule vocabulary selection — current gate
+### Phase 4E — Domain extraction-rule vocabulary selection — certified
 
-Phase 4E changes no production extraction behavior. A preregistered evaluation using the same Readability/JSDOM/Turndown engine versions as the certified extractor worker measures three candidate override primitives against frozen deterministic fixtures: `remove_selectors`, `content_selector` and `force_browser`. The clean control must remain byte-for-byte identical, invalid or missing selector state must fail open, and the smallest primitive set covering every demonstrated extraction need is selected.
+Phase 4E changes no production extraction behavior. A preregistered evaluation using the same Readability/JSDOM/Turndown engine versions as the certified extractor worker measured three candidate override primitives against frozen deterministic fixtures: `remove_selectors`, `content_selector` and `force_browser`. The clean control remained byte-for-byte identical, invalid or missing selector state failed open, and the smallest primitive set covering every demonstrated extraction need was selected.
 
 The policy-only candidate `4f688d6983a209b2cee6e5dd378450e6b53ab559` passed the complete 9/9 workflow matrix before fixtures or an evaluator were accepted. The corrected evaluation candidate `baf1865560a8970d7d6563aae5742b1a33287ea4` then passed the complete 9/9 matrix and selected the unique minimum set `remove_selectors + force_browser`. `remove_selectors` fixed both the boilerplate-pollution and nonstandard-root fixtures; `force_browser` fixed the static-false-positive fixture. `content_selector` improved the nonstandard-root fixture but was rejected as `redundant_under_minimum_primitive_cover`. The exact evidence is frozen in `evaluation/phase4e_domain_rule_selection_report.json`.
 
-No site-specific production rules, domain matching/precedence semantics, rule configuration surface, or production worker/extractor behavior are introduced by Phase 4E. Any production rule-engine implementation must be a later separately preregistered phase and, absent new evidence, must limit its primitive vocabulary to the two selected capabilities.
+No site-specific production rules, domain matching/precedence semantics, rule configuration surface, or production worker/extractor behavior were introduced by Phase 4E. The documentation/evidence-complete head `d30f755d19f97f2802a5dac4c7a347cfe0360bc3` passed two complete 9-workflow PR matrices with zero failures. PR #18 was merged using that exact head, producing `main` SHA `d9b3b25b8428fa2003a14099910d27ae2b326cf2`, which was independently certified with exactly 9/9 push workflows and zero failures.
 
-Phase 4E remains open until this documentation/evidence-complete head passes the complete 9-workflow matrix, PR #18 is merged with its exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
+### Phase 4F — Production domain extraction-rule engine — current gate
+
+Phase 4F implements only the two primitives selected by certified Phase 4E. `SUPRACRAWL_EXTRACTION_DOMAIN_RULES` is a JSON list that defaults to `[]`. Rules use exact normalized `FetchResult.final_url` host matching only: no wildcards, suffix inheritance, canonical-URL remapping, or precedence. The rule model rejects IP literals, malformed/wildcard hosts, unknown fields, duplicate normalized hosts and no-op rules.
+
+`remove_selectors` is applied atomically before Readability on both static and rendered inputs. If any configured selector is syntactically invalid, no custom removal is applied for that extraction and the existing path is preserved. `force_browser` requests the existing protected render path even when the normal quality heuristic would not; a valid forced render is selected directly, while browser-disabled and render-failure cases retain the static extraction. Neither primitive bypasses the existing fetch, redirect, SSRF, robots, browser-network or worker-fallback boundaries.
+
+The policy-only candidate `65e5743df35560d3610e8feec87b48713cafc9a9` passed the complete 9/9 workflow matrix before runtime work began. Two intermediate functional candidates, `f13a433f5917bc0e52a8e6a377f8535ae3c58206` and `20dce8b9ef376707194c1de47661d070e3c4052c`, were rejected because the CI Python job stopped at Ruff `I001`; the worker gate passed and neither candidate was accepted for certification. The corrected functional candidate `cfc5ddd889cb778f0d85151ad5a75bf1bee74eb9` then passed the complete 9/9 matrix with the full Python suite and worker smoke/evaluation gates green.
+
+The operational configuration candidate `880c58eaf4847e53f975e2ccd6c910176e7a5056` adds exactly one default-empty configuration line to `.env.example` and one to `docker-compose.yml` and independently passed the complete 9/9 matrix. Exact pre-merge evidence is frozen in `evaluation/phase4f_domain_rule_engine_report.json`. Phase 4F ships no site-specific rule entries and does not add `content_selector`, wildcard/suffix matching, a new endpoint, response fields, metrics, persistent state, crawler/scheduler behavior, indexing/retrieval behavior or ranking changes.
+
+Phase 4F remains open until this documentation/evidence-complete head passes the complete 9-workflow matrix, PR #19 is merged using that exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
 
 ### Later measured work
 
 - distributed scheduling, leader election or cross-process deduplication only if multi-replica deployment measurements justify it;
-- production per-domain extraction-rule implementation using only the Phase 4E-selected primitives unless new preregistered evidence justifies expanding the vocabulary;
+- site-specific rule entries, new extraction-rule primitives, or wildcard/suffix matching only after new preregistered evidence demonstrates need and fail-open behavior;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
 - scale-specific ANN/GPU work only when corpus/load measurements require it;
