@@ -7,13 +7,12 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
     HttpUrl,
-    model_validator,
     StringConstraints,
+    field_validator,
+    model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 _HOST_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 Selector = Annotated[
