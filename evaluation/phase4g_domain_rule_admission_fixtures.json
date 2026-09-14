@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "phase": "4G",
+  "self_test_only": true,
+  "controls": {
+    "clean_nonmatching_control": {
+      "url": "https://control.example/article",
+      "static_html": "<!doctype html><html><head><title>Control</title><link rel=\"canonical\" href=\"https://remove-admit.example/story\"></head><body><article><h1>Control article</h1><p>PHASE4G_CONTROL_REQUIRED stable clean content for nonmatching rule isolation.</p><p>Second stable control paragraph for byte-equivalence verification.</p></article><script>PHASE4G_CONTROL_FORBIDDEN</script></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Control</title><link rel=\"canonical\" href=\"https://remove-admit.example/story\"></head><body><article><h1>Control article</h1><p>PHASE4G_CONTROL_REQUIRED stable clean content for nonmatching rule isolation.</p><p>Second stable control paragraph for byte-equivalence verification.</p></article><script>PHASE4G_CONTROL_FORBIDDEN</script></body></html>",
+      "required_markers": ["PHASE4G_CONTROL_REQUIRED"],
+      "forbidden_markers": ["PHASE4G_CONTROL_FORBIDDEN"]
+    }
+  },
+  "bundles": [
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "class": "remove_selectors_admissible",
+      "host": "remove-admit.example",
+      "url": "https://remove-admit.example/story",
+      "failure_class": "boilerplate_pollution",
+      "candidate_rule": {
+        "remove_selectors": [".phase4g-noise"]
+      },
+      "static_html": "<!doctype html><html><head><title>Polluted story</title></head><body><article><h1>Polluted story</h1><p>PHASE4G_REMOVE_REQUIRED_A useful article opening with stable prose for extraction.</p><div class=\"phase4g-noise\"><p>PHASE4G_REMOVE_FORBIDDEN consent marketing repeated noise repeated noise repeated noise.</p></div><p>More useful article prose keeps the document coherent for Readability.</p><p>PHASE4G_REMOVE_REQUIRED_B useful article ending survives cleanup.</p></article></body></html>",
+      "required_markers": ["PHASE4G_REMOVE_REQUIRED_A", "PHASE4G_REMOVE_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4G_REMOVE_FORBIDDEN"],
+      "expected_decision": "ADMIT",
+      "expected_selected_rule": {
+        "remove_selectors": [".phase4g-noise"]
+      }
+    },
+    {
+      "bundle_id": "force_browser_admissible",
+      "class": "force_browser_admissible",
+      "host": "force-admit.example",
+      "url": "https://force-admit.example/app",
+      "failure_class": "static_false_positive",
+      "candidate_rule": {
+        "force_browser": true
+      },
+      "static_html": "<!doctype html><html><head><title>Static shell</title></head><body><article><h1>Loading report</h1><p>PHASE4G_FORCE_FORBIDDEN coherent static placeholder content looks extractable but is not hydrated.</p><p>Static shell prose remains intentionally plausible.</p></article></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Hydrated report</title></head><body><article><h1>Hydrated report</h1><p>PHASE4G_FORCE_REQUIRED_A hydrated content produced after browser rendering.</p><p>PHASE4G_FORCE_REQUIRED_B second marker proves rendered output selection.</p></article></body></html>",
+      "required_markers": ["PHASE4G_FORCE_REQUIRED_A", "PHASE4G_FORCE_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4G_FORCE_FORBIDDEN"],
+      "expected_decision": "ADMIT",
+      "expected_selected_rule": {
+        "force_browser": true
+      }
+    },
+    {
+      "bundle_id": "baseline_already_passes_rejected",
+      "class": "baseline_already_passes_rejected",
+      "host": "already-clean.example",
+      "url": "https://already-clean.example/article",
+      "failure_class": "none",
+      "candidate_rule": {
+        "remove_selectors": [".does-not-exist"]
+      },
+      "static_html": "<!doctype html><html><head><title>Already clean</title></head><body><article><h1>Already clean</h1><p>PHASE4G_ALREADY_REQUIRED baseline extraction already satisfies the preregistered contract.</p><p>Additional stable article prose.</p></article></body></html>",
+      "required_markers": ["PHASE4G_ALREADY_REQUIRED"],
+      "forbidden_markers": ["PHASE4G_ALREADY_FORBIDDEN"],
+      "expected_decision": "REJECT",
+      "expected_reason": "no_demonstrated_need"
+    },
+    {
+      "bundle_id": "candidate_loses_required_content_rejected",
+      "class": "candidate_loses_required_content_rejected",
+      "host": "overremove.example",
+      "url": "https://overremove.example/story",
+      "failure_class": "boilerplate_pollution",
+      "candidate_rule": {
+        "remove_selectors": ["article"]
+      },
+      "static_html": "<!doctype html><html><head><title>Overremove</title></head><body><article><h1>Overremove</h1><p>PHASE4G_OVERREMOVE_REQUIRED required article content must survive.</p><p>PHASE4G_OVERREMOVE_FORBIDDEN unwanted noise is colocated with required content.</p><p>More article prose keeps Readability stable.</p></article></body></html>",
+      "required_markers": ["PHASE4G_OVERREMOVE_REQUIRED"],
+      "forbidden_markers": ["PHASE4G_OVERREMOVE_FORBIDDEN"],
+      "expected_decision": "REJECT",
+      "expected_reason": "candidate_did_not_pass"
+    },
+    {
+      "bundle_id": "invalid_selector_rejected_and_fail_open",
+      "class": "invalid_selector_rejected_and_fail_open",
+      "host": "invalid-selector.example",
+      "url": "https://invalid-selector.example/story",
+      "failure_class": "boilerplate_pollution",
+      "candidate_rule": {
+        "remove_selectors": ["["]
+      },
+      "static_html": "<!doctype html><html><head><title>Invalid selector</title></head><body><article><h1>Invalid selector</h1><p>PHASE4G_INVALID_REQUIRED required article content.</p><div class=\"noise\"><p>PHASE4G_INVALID_FORBIDDEN noise remains in the baseline.</p></div><p>More stable article prose.</p></article></body></html>",
+      "required_markers": ["PHASE4G_INVALID_REQUIRED"],
+      "forbidden_markers": ["PHASE4G_INVALID_FORBIDDEN"],
+      "expected_decision": "REJECT",
+      "expected_reason": "candidate_did_not_pass"
+    },
+    {
+      "bundle_id": "combined_rule_reduced_to_minimal_subset",
+      "class": "combined_rule_reduced_to_minimal_subset",
+      "host": "combined-min.example",
+      "url": "https://combined-min.example/story",
+      "failure_class": "boilerplate_pollution",
+      "candidate_rule": {
+        "remove_selectors": [".phase4g-combined-noise"],
+        "force_browser": true
+      },
+      "static_html": "<!doctype html><html><head><title>Combined candidate</title></head><body><article><h1>Combined candidate</h1><p>PHASE4G_COMBINED_REQUIRED_A useful static content.</p><div class=\"phase4g-combined-noise\"><p>PHASE4G_COMBINED_FORBIDDEN removable noise.</p></div><p>PHASE4G_COMBINED_REQUIRED_B second useful marker.</p></article></body></html>",
+      "rendered_html": "<!doctype html><html><head><title>Combined candidate rendered</title></head><body><article><h1>Combined candidate rendered</h1><p>PHASE4G_COMBINED_REQUIRED_A useful rendered content.</p><div class=\"phase4g-combined-noise\"><p>PHASE4G_COMBINED_FORBIDDEN removable noise.</p></div><p>PHASE4G_COMBINED_REQUIRED_B second useful marker.</p></article></body></html>",
+      "required_markers": ["PHASE4G_COMBINED_REQUIRED_A", "PHASE4G_COMBINED_REQUIRED_B"],
+      "forbidden_markers": ["PHASE4G_COMBINED_FORBIDDEN"],
+      "expected_decision": "ADMIT",
+      "expected_selected_rule": {
+        "remove_selectors": [".phase4g-combined-noise"]
+      }
+    }
+  ],
+  "isolation_cases": [
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "url": "https://remove-admit.example/story",
+      "expected_match": true
+    },
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "url": "https://sub.remove-admit.example/story",
+      "expected_match": false
+    },
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "url": "https://example/story",
+      "expected_match": false
+    },
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "url": "https://sibling.example/story",
+      "expected_match": false
+    },
+    {
+      "bundle_id": "remove_selectors_admissible",
+      "url": "https://REMOVE-ADMIT.EXAMPLE./story",
+      "expected_match": true
+    }
+  ],
+  "fail_open_cases": {
+    "invalid_remove_selector": "[",
+    "missing_remove_selector": ".phase4g-missing"
+  },
+  "expected_admitted_production_rules": []
+}
