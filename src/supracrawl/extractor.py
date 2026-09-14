@@ -1,13 +1,13 @@
 import hashlib
 import re
 from dataclasses import dataclass
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 import trafilatura
 from selectolax.parser import HTMLParser
 
-from .config import Settings
+from .config import ExtractionDomainRule, Settings
 from .fetcher import FetchResult, HttpFetcher
 from .urls import normalize_url
 
@@ -34,8 +34,19 @@ class Extractor:
 
     async def extract_fetched(self, fetched: FetchResult) -> Extraction:
         metadata = self._metadata(fetched.html, fetched.final_url)
+        rule = self._domain_rule(fetched.final_url)
+        worker_kwargs = (
+            {"remove_selectors": rule.remove_selectors}
+            if rule is not None and rule.remove_selectors
+            else {}
+        )
 
-        extraction = await self._worker_extract(fetched.html, fetched.final_url, render=False)
+        extraction = await self._worker_extract(
+            fetched.html,
+            fetched.final_url,
+            render=False,
+            **worker_kwargs,
+        )
         if extraction is None:
             extraction = self._trafilatura_extract(fetched.html, fetched.final_url)
 
@@ -43,11 +54,17 @@ class Extractor:
         extraction.canonical_url = metadata["canonical_url"]
         extraction.quality = self._quality(extraction.markdown, fetched.html)
 
-        if (
-            self.settings.browser_enabled
-            and self._needs_browser(extraction.markdown, fetched.html, extraction.quality)
+        force_browser = bool(rule is not None and rule.force_browser)
+        if self.settings.browser_enabled and (
+            force_browser
+            or self._needs_browser(extraction.markdown, fetched.html, extraction.quality)
         ):
-            rendered = await self._worker_extract("", fetched.final_url, render=True)
+            rendered = await self._worker_extract(
+                "",
+                fetched.final_url,
+                render=True,
+                **worker_kwargs,
+            )
             if rendered:
                 rendered.title = rendered.title or extraction.title
                 rendered.canonical_url = extraction.canonical_url
@@ -56,14 +73,22 @@ class Extractor:
                     rendered.quality > extraction.quality
                     or len(rendered.markdown) > len(extraction.markdown)
                 )
-                if rendered_is_better:
+                if force_browser or rendered_is_better:
                     extraction = rendered
 
         return extraction
 
-    async def _worker_extract(self, html: str, url: str, render: bool) -> Extraction | None:
+    async def _worker_extract(
+        self,
+        html: str,
+        url: str,
+        render: bool,
+        remove_selectors: list[str] | None = None,
+    ) -> Extraction | None:
         endpoint = "/render-extract" if render else "/extract"
         payload = {"url": url} if render else {"url": url, "html": html}
+        if remove_selectors:
+            payload["remove_selectors"] = list(remove_selectors)
         try:
             timeout = self.settings.extractor_worker_timeout_s
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -94,6 +119,15 @@ class Extractor:
             quality=0.0,
             rendered=render,
         )
+
+    def _domain_rule(self, url: str) -> ExtractionDomainRule | None:
+        host = (urlsplit(url).hostname or "").rstrip(".").lower()
+        if not host:
+            return None
+        for rule in self.settings.extraction_domain_rules:
+            if rule.host == host:
+                return rule
+        return None
 
     def _trafilatura_extract(self, html: str, url: str) -> Extraction:
         markdown = trafilatura.extract(

@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "phase": "4F",
+  "gate": "phase4f-domain-extraction-rule-engine-v1",
+  "base_certified_sha": "d9b3b25b8428fa2003a14099910d27ae2b326cf2",
+  "scope": "production implementation of the minimum per-host extraction override engine selected by certified Phase 4E, without adding site-specific rules",
+  "phase4e_selection": {
+    "certified_main_sha": "d9b3b25b8428fa2003a14099910d27ae2b326cf2",
+    "certified_evaluation_candidate_sha": "baf1865560a8970d7d6563aae5742b1a33287ea4",
+    "selected_primitives": ["remove_selectors", "force_browser"],
+    "rejected_primitive": "content_selector",
+    "rejected_reason": "redundant_under_minimum_primitive_cover"
+  },
+  "configuration_contract": {
+    "setting": "SUPRACRAWL_EXTRACTION_DOMAIN_RULES",
+    "encoding": "JSON list of rule objects parsed by Settings",
+    "default": [],
+    "default_behavior": "an empty rule list preserves the certified global extraction path",
+    "maximum_rules": 100,
+    "rule_schema": {
+      "host": "required exact DNS hostname; normalize to lowercase and remove one or more trailing dots; schemes, ports, paths, credentials, wildcards, empty labels and IP literals are rejected",
+      "remove_selectors": "optional list of 1 to 32 non-empty CSS selector strings, each at most 512 characters; default empty",
+      "force_browser": "optional boolean; default false"
+    },
+    "rule_validation": [
+      "unknown rule fields are rejected",
+      "duplicate normalized hosts are rejected",
+      "a rule that enables neither remove_selectors nor force_browser is rejected"
+    ]
+  },
+  "matching_contract": {
+    "url_source": "FetchResult.final_url after the certified fetch/redirect path completes",
+    "host_normalization": "urlsplit(final_url).hostname, lowercase, trailing dots removed",
+    "match": "exact normalized hostname equality only",
+    "subdomains": "do not inherit parent-domain rules",
+    "wildcards": false,
+    "precedence": "none; normalized host keys are unique so at most one rule can match",
+    "canonical_url": "rel=canonical never changes rule selection"
+  },
+  "remove_selectors_contract": {
+    "applies_to": ["static Readability extraction", "rendered Readability extraction"],
+    "ordering": "custom removals occur before the worker's existing global cleanup selectors and before Mozilla Readability",
+    "atomicity": "all configured selectors are resolved before any custom DOM mutation; if any selector is syntactically invalid, no configured selector removal is applied for that extraction",
+    "invalid_selector_behavior": "fail open to the existing unmodified-by-custom-rules Readability path",
+    "missing_match_behavior": "no-op",
+    "worker_failure_behavior": "preserve the existing Python fallback path; custom selector rules do not make worker failure fatal and do not alter Trafilatura fallback semantics",
+    "payload_scope": "the Python extractor sends remove_selectors only for the matched rule"
+  },
+  "force_browser_contract": {
+    "trigger": "a matched rule with force_browser=true requests the existing render-extract path even when the global quality heuristic would not request browser rendering",
+    "browser_enabled": "the request is attempted only when the existing global browser_enabled setting is true",
+    "browser_disabled_behavior": "return the existing static extraction without error",
+    "render_failure_behavior": "return the existing static extraction without error",
+    "render_success_selection": "a valid rendered extraction replaces the static extraction regardless of the existing quality/length comparison; this mirrors the certified Phase 4E candidate semantics",
+    "heuristic_behavior_without_force": "when no matched rule forces rendering, the existing _needs_browser trigger and rendered-is-better selection remain unchanged",
+    "security": "force_browser does not bypass validatePublicUrl, request interception, SSRF controls, browser_enabled, fetcher policy, robots policy, or any existing browser security behavior"
+  },
+  "combined_rule_contract": {
+    "behavior": "when one matched rule contains both primitives, remove_selectors is applied to both the static and rendered Readability inputs and force_browser controls whether the rendered path is requested/selected",
+    "failure_isolation": "an invalid remove selector fails open for selector mutation but does not suppress an otherwise eligible force_browser request"
+  },
+  "observability_and_api_contract": {
+    "new_endpoint": false,
+    "response_schema_change": false,
+    "extractor_identity": "retain the existing readability/readability+playwright/trafilatura extractor labels",
+    "new_metrics": false,
+    "new_persistent_state": false
+  },
+  "test_contract": {
+    "settings": [
+      "empty default accepted",
+      "host normalization deterministic",
+      "duplicate normalized host rejected",
+      "scheme/port/path/wildcard/IP/malformed host rejected",
+      "unknown fields rejected",
+      "no-op rule rejected"
+    ],
+    "matching": [
+      "exact final host matches",
+      "case and trailing-dot normalization match",
+      "subdomain does not inherit parent rule",
+      "requested/original host does not override final redirected host",
+      "canonical URL does not influence matching"
+    ],
+    "remove_selectors": [
+      "no matched rule preserves baseline output",
+      "valid selector removes preregistered noise while preserving required content",
+      "missing selector match is baseline-equivalent",
+      "mixed valid plus invalid selectors are baseline-equivalent, proving atomic fail-open",
+      "the same cleanup function is exercised on frozen static and rendered fixture HTML"
+    ],
+    "force_browser": [
+      "matched force_browser requests rendering even when _needs_browser is false",
+      "successful forced render is selected even if shorter or lower-scored than static",
+      "browser disabled retains static output",
+      "render failure retains static output",
+      "unmatched/non-forced extraction retains existing heuristic selection semantics"
+    ],
+    "regression": [
+      "Phase 4E evaluator remains passing",
+      "full existing 9-workflow matrix passes on the policy-only head",
+      "full existing 9-workflow matrix passes on the functional implementation head"
+    ]
+  },
+  "implementation_boundaries": {
+    "production_files_may_change": [
+      "src/supracrawl/config.py",
+      "src/supracrawl/extractor.py",
+      "services/extractor-worker/server.mjs",
+      "worker/Python tests",
+      ".env.example",
+      "docker-compose.yml",
+      "README.md"
+    ],
+    "no_site_specific_rules": true,
+    "no_content_selector": true,
+    "no_wildcard_or_suffix_matching": true,
+    "no_new_api_endpoint": true,
+    "no_fetcher_change": true,
+    "no_browser_network_security_change": true,
+    "no_ssrf_or_robots_change": true,
+    "no_crawler_or_scheduler_change": true,
+    "no_index_or_retrieval_change": true,
+    "no_ranking_or_reranker_change": true,
+    "no_new_performance_threshold": true
+  },
+  "acceptance": {
+    "policy_only_head_is_certified_9_of_9_before_runtime_work": true,
+    "default_empty_rules_preserve_existing_behavior": true,
+    "only_phase4e_selected_primitives_are_implemented": true,
+    "matching_and_failure_semantics_follow_this_policy_exactly": true,
+    "phase4e_fixtures_are_reused_for_production_behavior_tests": true,
+    "functional_head_is_certified_9_of_9_before_documentation_or_merge": true,
+    "merge_uses_exact_expected_head_sha": true,
+    "merged_main_is_independently_certified_by_exact_9_of_9_push_workflows": true
+  }
+}

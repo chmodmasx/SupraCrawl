@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "phase": "4F",
+  "gate": "phase4f-domain-extraction-rule-engine-v1",
+  "decision": "PASS_IMPLEMENTATION_AND_OPERATIONAL_GATES",
+  "base_certified_sha": "d9b3b25b8428fa2003a14099910d27ae2b326cf2",
+  "phase4e_selection": {
+    "selected_primitives": [
+      "remove_selectors",
+      "force_browser"
+    ],
+    "rejected_primitive": "content_selector",
+    "rejected_reason": "redundant_under_minimum_primitive_cover"
+  },
+  "policy_gate": {
+    "sha": "65e5743df35560d3610e8feec87b48713cafc9a9",
+    "result": "9/9 success, 0 failures",
+    "workflow_runs": {
+      "CI": 34882952673,
+      "Phase 1 Verification": 34882952671,
+      "Phase 2 Verification": 34882952696,
+      "Phase 3 Verification": 34882952724,
+      "Phase 3B Evaluation": 34882952692,
+      "Phase 3C Verification": 34882952634,
+      "Phase 3D Verification": 34882952663,
+      "Phase 3E Verification": 34882952635,
+      "Phase 3F Evaluation": 34882952630
+    }
+  },
+  "rejected_functional_candidates": [
+    {
+      "sha": "f13a433f5917bc0e52a8e6a377f8535ae3c58206",
+      "reason": "CI Python job stopped at Ruff I001 before Python tests; extractor-worker passed. Rejected as a certification candidate."
+    },
+    {
+      "sha": "20dce8b9ef376707194c1de47661d070e3c4052c",
+      "reason": "First formatting correction still failed Ruff I001; extractor-worker passed. Rejected as a certification candidate."
+    }
+  ],
+  "functional_gate": {
+    "sha": "cfc5ddd889cb778f0d85151ad5a75bf1bee74eb9",
+    "result": "9/9 success, 0 failures",
+    "workflow_runs": {
+      "CI": 34884396097,
+      "Phase 1 Verification": 34884395993,
+      "Phase 2 Verification": 34884396000,
+      "Phase 3 Verification": 34884396055,
+      "Phase 3B Evaluation": 34884395981,
+      "Phase 3C Verification": 34884396114,
+      "Phase 3D Verification": 34884396006,
+      "Phase 3E Verification": 34884396168,
+      "Phase 3F Evaluation": 34884396191
+    },
+    "production_files": [
+      "src/supracrawl/config.py",
+      "src/supracrawl/extractor.py",
+      "services/extractor-worker/server.mjs",
+      "services/extractor-worker/smoke-test.mjs",
+      "tests/test_phase4f_domain_rules.py"
+    ],
+    "contract": {
+      "matching": "exact normalized FetchResult.final_url hostname only; no wildcard, suffix inheritance, or precedence",
+      "remove_selectors": "atomic pre-Readability DOM removal on static and rendered inputs; invalid CSS fails open to the existing unmodified-by-custom-rules path",
+      "force_browser": "reuses the existing render path; successful forced render replaces static; browser-disabled or render-failure retains static",
+      "default": "SUPRACRAWL_EXTRACTION_DOMAIN_RULES=[] preserves the certified global extraction path",
+      "site_specific_rules": false,
+      "content_selector": false
+    }
+  },
+  "operational_gate": {
+    "sha": "880c58eaf4847e53f975e2ccd6c910176e7a5056",
+    "result": "9/9 success, 0 failures",
+    "diff": {
+      ".env.example": "+1 line: SUPRACRAWL_EXTRACTION_DOMAIN_RULES=[]",
+      "docker-compose.yml": "+1 line: SUPRACRAWL_EXTRACTION_DOMAIN_RULES with [] default"
+    },
+    "workflow_runs": {
+      "CI": 34885018468,
+      "Phase 1 Verification": 34885018451,
+      "Phase 2 Verification": 34885018515,
+      "Phase 3 Verification": 34885018513,
+      "Phase 3B Evaluation": 34885018599,
+      "Phase 3C Verification": 34885018460,
+      "Phase 3D Verification": 34885018508,
+      "Phase 3E Verification": 34885018471,
+      "Phase 3F Evaluation": 34885018495
+    }
+  },
+  "scope_boundaries": {
+    "new_api_endpoint": false,
+    "response_schema_change": false,
+    "fetcher_change": false,
+    "ssrf_or_robots_change": false,
+    "browser_network_security_change": false,
+    "crawler_or_scheduler_change": false,
+    "index_or_retrieval_change": false,
+    "ranking_or_reranker_change": false,
+    "new_persistent_state": false,
+    "new_metrics": false,
+    "new_performance_threshold": false,
+    "site_specific_rules": false,
+    "wildcard_or_suffix_matching": false,
+    "content_selector": false
+  },
+  "remaining_certification": [
+    "documentation/evidence-complete head must pass the complete 9-workflow pull-request matrix with zero failures",
+    "PR #19 must merge using the exact certified documentation head SHA",
+    "the resulting merged main SHA must independently pass exactly 9/9 push workflows with zero failures"
+  ]
+}
