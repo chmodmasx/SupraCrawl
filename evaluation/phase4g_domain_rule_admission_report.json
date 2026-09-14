@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "phase": "4G",
+  "decision": "PASS_DOMAIN_RULE_ADMISSION_PROTOCOL",
+  "scope": "evaluation-only reusable admission protocol; no production site-specific rule is admitted by Phase 4G",
+  "base_certified_sha": "9ec6e9aae85dac6d68c7877d6385fa8ad4db64f5",
+  "policy_sha": "77b3996d9c4ab89a6649abec57cb26ba6bcdbc11",
+  "certified_functional_sha": "bad00ebfe296bdc9db8df8391a874c2a9e022697",
+  "runtime_evidence": {
+    "workflow": "CI",
+    "workflow_run_number": 155,
+    "workflow_run_id": 34897865121,
+    "job": "extractor-worker",
+    "job_id": 104156358504,
+    "result": "success",
+    "marker_begin": "PHASE4G_REPORT_BEGIN",
+    "marker_end": "PHASE4G_REPORT_END"
+  },
+  "hashes": {
+    "fixture_file_sha256": "52890777ae3a395c9d1a222510cd46ddef2f9f2bb8ddd37796afd1d243b54760",
+    "evaluator_source_sha256": "c392ba0bd40aba74f8a803a6e1a91a2b9793c54ce8ea731ccee49a4107a5287b"
+  },
+  "engine": {
+    "readability": "0.6.0",
+    "jsdom": "26.1.0",
+    "turndown": "7.2.4"
+  },
+  "bundle_host_validation": {
+    "all_valid": true,
+    "unique_normalized_hosts": true,
+    "normalized_hosts": [
+      "remove-admit.example",
+      "force-admit.example",
+      "already-clean.example",
+      "overremove.example",
+      "invalid-selector.example",
+      "combined-min.example"
+    ]
+  },
+  "bundle_results": {
+    "remove_selectors_admissible": {
+      "bundle_hash_sha256": "402ea993980b7fa8830b7313c37f9dac035d313eb4bd46b6bfca9e2df3d6129d",
+      "static_html_sha256": "0d32bdab28021f1789329d5ef0493c22121e1950a617818a156afa60083552d7",
+      "rendered_html_sha256": null,
+      "baseline": {
+        "output": {
+          "title": "Polluted story",
+          "markdown": "PHASE4G\\_REMOVE\\_REQUIRED\\_A useful article opening with stable prose for extraction.\n\nPHASE4G\\_REMOVE\\_FORBIDDEN consent marketing repeated noise repeated noise repeated noise.\n\nMore useful article prose keeps the document coherent for Readability.\n\nPHASE4G\\_REMOVE\\_REQUIRED\\_B useful article ending survives cleanup.",
+          "text": "PHASE4G_REMOVE_REQUIRED_A useful article opening with stable prose for extraction.PHASE4G_REMOVE_FORBIDDEN consent marketing repeated noise repeated noise repeated noise.More useful article prose keeps the document coherent for Readability.PHASE4G_REMOVE_REQUIRED_B useful article ending survives cleanup."
+        },
+        "score": {
+          "pass": false,
+          "missing_required": [],
+          "present_forbidden": ["PHASE4G_REMOVE_FORBIDDEN"]
+        }
+      },
+      "candidate": {
+        "rule": {"remove_selectors": [".phase4g-noise"]},
+        "output": {
+          "title": "Polluted story",
+          "markdown": "PHASE4G\\_REMOVE\\_REQUIRED\\_A useful article opening with stable prose for extraction.\n\nMore useful article prose keeps the document coherent for Readability.\n\nPHASE4G\\_REMOVE\\_REQUIRED\\_B useful article ending survives cleanup.",
+          "text": "PHASE4G_REMOVE_REQUIRED_A useful article opening with stable prose for extraction.More useful article prose keeps the document coherent for Readability.PHASE4G_REMOVE_REQUIRED_B useful article ending survives cleanup."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []},
+        "selector_valid": true,
+        "rendered_attempted": false,
+        "rendered_selected": false
+      },
+      "selected_rule": {"remove_selectors": [".phase4g-noise"]},
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "ADMIT",
+      "reasons": []
+    },
+    "force_browser_admissible": {
+      "bundle_hash_sha256": "97cc1225ef2eceb34b6f0ef282d66ed325d2622609f9ddd204c94a42f98829a6",
+      "static_html_sha256": "b51ab082c073bea64b2bc50e7c0f92ca8fffb3d1ab2930764c58cafeb3ac6071",
+      "rendered_html_sha256": "4c712ec86c23276367ebad4eef99c816ad25aaf834e0aeae7e143077a72cc552",
+      "baseline": {
+        "output": {
+          "title": "Static shell",
+          "markdown": "## Loading report\n\nPHASE4G\\_FORCE\\_FORBIDDEN coherent static placeholder content looks extractable but is not hydrated.\n\nStatic shell prose remains intentionally plausible.",
+          "text": "Loading reportPHASE4G_FORCE_FORBIDDEN coherent static placeholder content looks extractable but is not hydrated.Static shell prose remains intentionally plausible."
+        },
+        "score": {
+          "pass": false,
+          "missing_required": ["PHASE4G_FORCE_REQUIRED_A", "PHASE4G_FORCE_REQUIRED_B"],
+          "present_forbidden": ["PHASE4G_FORCE_FORBIDDEN"]
+        }
+      },
+      "candidate": {
+        "rule": {"force_browser": true},
+        "output": {
+          "title": "Hydrated report",
+          "markdown": "PHASE4G\\_FORCE\\_REQUIRED\\_A hydrated content produced after browser rendering.\n\nPHASE4G\\_FORCE\\_REQUIRED\\_B second marker proves rendered output selection.",
+          "text": "PHASE4G_FORCE_REQUIRED_A hydrated content produced after browser rendering.PHASE4G_FORCE_REQUIRED_B second marker proves rendered output selection."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []},
+        "selector_valid": true,
+        "rendered_attempted": true,
+        "rendered_selected": true
+      },
+      "selected_rule": {"force_browser": true},
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "ADMIT",
+      "reasons": []
+    },
+    "baseline_already_passes_rejected": {
+      "bundle_hash_sha256": "6c33ceeda23802b5a257542b9602e9670b3ffb3a450a3a9730c7ad4d6238ab08",
+      "static_html_sha256": "68fab9666d5392fe49381ffc89dbc5ec8d181b25bdcc91a6d5e44f4a7083a42f",
+      "rendered_html_sha256": null,
+      "baseline": {
+        "output": {
+          "title": "Already clean",
+          "markdown": "PHASE4G\\_ALREADY\\_REQUIRED baseline extraction already satisfies the preregistered contract.\n\nAdditional stable article prose.",
+          "text": "PHASE4G_ALREADY_REQUIRED baseline extraction already satisfies the preregistered contract.Additional stable article prose."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+      },
+      "candidate": {
+        "rule": {"remove_selectors": [".does-not-exist"]},
+        "output": {
+          "title": "Already clean",
+          "markdown": "PHASE4G\\_ALREADY\\_REQUIRED baseline extraction already satisfies the preregistered contract.\n\nAdditional stable article prose.",
+          "text": "PHASE4G_ALREADY_REQUIRED baseline extraction already satisfies the preregistered contract.Additional stable article prose."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []}
+      },
+      "selected_rule": {"remove_selectors": [".does-not-exist"]},
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "REJECT",
+      "reasons": ["no_demonstrated_need", "remove_selectors_not_effective"]
+    },
+    "candidate_loses_required_content_rejected": {
+      "bundle_hash_sha256": "19e181ca8a6dde6e6a1073472d6945e461176b9b472d9e66a9b66480d881f388",
+      "static_html_sha256": "9a4a213fe7854567380a1618cdbcb31391972b95180bff3ff272c71d8f0f096d",
+      "rendered_html_sha256": null,
+      "baseline": {
+        "output": {
+          "title": "Overremove",
+          "markdown": "PHASE4G\\_OVERREMOVE\\_REQUIRED required article content must survive.\n\nPHASE4G\\_OVERREMOVE\\_FORBIDDEN unwanted noise is colocated with required content.\n\nMore article prose keeps Readability stable.",
+          "text": "PHASE4G_OVERREMOVE_REQUIRED required article content must survive.PHASE4G_OVERREMOVE_FORBIDDEN unwanted noise is colocated with required content.More article prose keeps Readability stable."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4G_OVERREMOVE_FORBIDDEN"]}
+      },
+      "candidate": {
+        "rule": {"remove_selectors": ["article"]},
+        "output": {"title": "Overremove", "markdown": "", "text": ""},
+        "score": {"pass": false, "missing_required": ["PHASE4G_OVERREMOVE_REQUIRED"], "present_forbidden": []}
+      },
+      "selected_rule": null,
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "REJECT",
+      "reasons": ["candidate_did_not_pass"]
+    },
+    "invalid_selector_rejected_and_fail_open": {
+      "bundle_hash_sha256": "fb36ab855d95a2f549029c321b0e995989a95a7e62570bec81f6127bc2b9967b",
+      "static_html_sha256": "2cf30d63e5b03e81cbe47d16355b5547ded58fe68487b849162639fcc9bd727e",
+      "rendered_html_sha256": null,
+      "baseline": {
+        "output": {
+          "title": "Invalid selector",
+          "markdown": "PHASE4G\\_INVALID\\_REQUIRED required article content.\n\nPHASE4G\\_INVALID\\_FORBIDDEN noise remains in the baseline.\n\nMore stable article prose.",
+          "text": "PHASE4G_INVALID_REQUIRED required article content.PHASE4G_INVALID_FORBIDDEN noise remains in the baseline.More stable article prose."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4G_INVALID_FORBIDDEN"]}
+      },
+      "candidate": {
+        "rule": {"remove_selectors": ["["]},
+        "output": {
+          "title": "Invalid selector",
+          "markdown": "PHASE4G\\_INVALID\\_REQUIRED required article content.\n\nPHASE4G\\_INVALID\\_FORBIDDEN noise remains in the baseline.\n\nMore stable article prose.",
+          "text": "PHASE4G_INVALID_REQUIRED required article content.PHASE4G_INVALID_FORBIDDEN noise remains in the baseline.More stable article prose."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4G_INVALID_FORBIDDEN"]},
+        "selector_valid": false
+      },
+      "selected_rule": null,
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "REJECT",
+      "reasons": ["candidate_did_not_pass"]
+    },
+    "combined_rule_reduced_to_minimal_subset": {
+      "bundle_hash_sha256": "1a8e86e7031095ad544f67eae49c0eb71d6387d5680720d7948dade225f43150",
+      "static_html_sha256": "c84e0d0d87800a158f4205561023e580048b8a6ab6622d65ae965f6ed1a1fe83",
+      "rendered_html_sha256": "05858f84ca036525b5d7ca3996b0670b95899428fb516b025051834160f1b351",
+      "baseline": {
+        "output": {
+          "title": "Combined candidate",
+          "markdown": "PHASE4G\\_COMBINED\\_REQUIRED\\_A useful static content.\n\nPHASE4G\\_COMBINED\\_FORBIDDEN removable noise.\n\nPHASE4G\\_COMBINED\\_REQUIRED\\_B second useful marker.",
+          "text": "PHASE4G_COMBINED_REQUIRED_A useful static content.PHASE4G_COMBINED_FORBIDDEN removable noise.PHASE4G_COMBINED_REQUIRED_B second useful marker."
+        },
+        "score": {"pass": false, "missing_required": [], "present_forbidden": ["PHASE4G_COMBINED_FORBIDDEN"]}
+      },
+      "candidate": {
+        "rule": {"remove_selectors": [".phase4g-combined-noise"], "force_browser": true},
+        "output": {
+          "title": "Combined candidate rendered",
+          "markdown": "PHASE4G\\_COMBINED\\_REQUIRED\\_A useful rendered content.\n\nPHASE4G\\_COMBINED\\_REQUIRED\\_B second useful marker.",
+          "text": "PHASE4G_COMBINED_REQUIRED_A useful rendered content.PHASE4G_COMBINED_REQUIRED_B second useful marker."
+        },
+        "score": {"pass": true, "missing_required": [], "present_forbidden": []},
+        "selector_valid": true,
+        "rendered_attempted": true,
+        "rendered_selected": true
+      },
+      "passing_subsets": [
+        {"primitives": ["remove_selectors"], "rule": {"remove_selectors": [".phase4g-combined-noise"]}},
+        {"primitives": ["remove_selectors", "force_browser"], "rule": {"remove_selectors": [".phase4g-combined-noise"], "force_browser": true}}
+      ],
+      "selected_rule": {"remove_selectors": [".phase4g-combined-noise"]},
+      "deterministic": true,
+      "clean_nonmatching_control_byte_identical": true,
+      "decision": "ADMIT",
+      "reasons": []
+    }
+  },
+  "expected_decision_checks": {
+    "remove_selectors_admissible": true,
+    "force_browser_admissible": true,
+    "baseline_already_passes_rejected": true,
+    "candidate_loses_required_content_rejected": true,
+    "invalid_selector_rejected_and_fail_open": true,
+    "combined_rule_reduced_to_minimal_subset": true
+  },
+  "isolation_results": [
+    {"url": "https://remove-admit.example/story", "expected_match": true, "actual_match": true, "pass": true},
+    {"url": "https://sub.remove-admit.example/story", "expected_match": false, "actual_match": false, "pass": true},
+    {"url": "https://example/story", "expected_match": false, "actual_match": false, "pass": true},
+    {"url": "https://sibling.example/story", "expected_match": false, "actual_match": false, "pass": true},
+    {"url": "https://REMOVE-ADMIT.EXAMPLE./story", "expected_match": true, "actual_match": true, "pass": true}
+  ],
+  "fail_open_controls": {
+    "invalid_remove_selector_baseline_equivalent": true,
+    "missing_remove_selector_baseline_equivalent": true,
+    "force_browser_disabled_static_baseline_equivalent": true,
+    "render_failure_static_baseline_equivalent": true
+  },
+  "canonical_isolation_pass": true,
+  "self_test_admitted_rules": [
+    {"bundle_id": "remove_selectors_admissible", "host": "remove-admit.example", "selected_rule": {"remove_selectors": [".phase4g-noise"]}},
+    {"bundle_id": "force_browser_admissible", "host": "force-admit.example", "selected_rule": {"force_browser": true}},
+    {"bundle_id": "combined_rule_reduced_to_minimal_subset", "host": "combined-min.example", "selected_rule": {"remove_selectors": [".phase4g-combined-noise"]}}
+  ],
+  "admitted_production_rules": [],
+  "acceptance": {
+    "bundle_hosts_are_valid_and_unique": true,
+    "clean_control_baseline_passes": true,
+    "expected_self_test_decisions_match": true,
+    "all_bundle_runs_deterministic": true,
+    "all_nonmatching_controls_byte_identical": true,
+    "exact_host_isolation_passes": true,
+    "canonical_url_does_not_influence_matching": true,
+    "fail_open_controls_pass": true,
+    "combined_candidate_reduced_to_minimal_subset": true,
+    "phase4g_admitted_production_rule_set_is_empty": true,
+    "pass": true
+  },
+  "certification": {
+    "policy_only": {
+      "sha": "77b3996d9c4ab89a6649abec57cb26ba6bcdbc11",
+      "workflows_success": 9,
+      "workflows_failure": 0
+    },
+    "functional": {
+      "sha": "bad00ebfe296bdc9db8df8391a874c2a9e022697",
+      "workflows_success": 9,
+      "workflows_failure": 0,
+      "workflow_runs": [
+        {"name": "CI", "run_number": 155, "run_id": 34897865121},
+        {"name": "Phase 1 Verification", "run_number": 149, "run_id": 34897865222},
+        {"name": "Phase 2 Verification", "run_number": 145, "run_id": 34897865156},
+        {"name": "Phase 3 Verification", "run_number": 133, "run_id": 34897865171},
+        {"name": "Phase 3B Evaluation", "run_number": 124, "run_id": 34897865097},
+        {"name": "Phase 3C Verification", "run_number": 119, "run_id": 34897865106},
+        {"name": "Phase 3D Verification", "run_number": 106, "run_id": 34897865210},
+        {"name": "Phase 3E Verification", "run_number": 93, "run_id": 34897865130},
+        {"name": "Phase 3F Evaluation", "run_number": 85, "run_id": 34897865158}
+      ]
+    }
+  }
+}

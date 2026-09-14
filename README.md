@@ -48,7 +48,7 @@ SupraCrawl is not attempting to build a whole-web search engine in one step. Sea
 
 The promoted retrieval default is `hybrid`: BM25 remains the authoritative lexical backbone, multilingual E5 provides local dense retrieval, and deterministic reciprocal-rank fusion combines both rankings. Any vector-side failure degrades explicitly to BM25. Operators can still force BM25.
 
-A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler. Phase 4E is evaluation-only and selected `remove_selectors` plus `force_browser` as the minimum evidence-backed per-domain extraction-rule vocabulary. Phase 4F implements only those two primitives in production behind an empty-by-default exact-host rule list; it adds no site-specific rules, wildcard matching, new endpoint, or extraction response schema.
+A separately packaged Phase 3G reranker can optionally reorder the certified hybrid top-10 while preserving first-stage top-5 membership. It remains disabled by default and is not part of the standard production image. Phase 3H adds independently opt-in admission backpressure, Phase 3I adds process-local operational metrics, Phase 3J separates liveness from serving readiness, Phase 4A adds opt-in freshness admission for crawl reindex work, Phase 4B adds independently opt-in conditional HTTP revalidation for crawl leaves, Phase 4C measures the deterministic network/indexing savings of those certified refresh paths, and Phase 4D adds independently opt-in process-local fixed-delay scheduling that delegates every cycle to the same certified crawler. Phase 4E is evaluation-only and selected `remove_selectors` plus `force_browser` as the minimum evidence-backed per-domain extraction-rule vocabulary. Phase 4F implements only those two primitives in production behind an empty-by-default exact-host rule list; it adds no site-specific rules, wildcard matching, new endpoint, or extraction response schema. Phase 4G is evaluation-only and certifies a deterministic, network-free admission protocol for future exact-host site rules; it changes no production extraction behavior and admits no production rule by itself.
 
 ## Design rules
 
@@ -74,6 +74,7 @@ A separately packaged Phase 3G reranker can optionally reorder the certified hyb
 - Keep scheduled refresh independently opt-in and process-local; scheduling must reuse the certified crawler rather than introduce a second fetch/index path.
 - Add per-domain extraction overrides only after a preregistered fixture demonstrates value; keep defaults neutral and invalid/missing override state fail-open to the existing extraction path.
 - Keep production extraction-rule matching exact-host-only with unique normalized host keys; add wildcard/suffix matching or new rule primitives only after separately preregistered evidence justifies them.
+- Require any future site-specific production rule entry to pass the frozen Phase 4G admission protocol: demonstrated baseline need, strict candidate improvement, minimal primitive subset, deterministic output, exact-host isolation, and applicable fail-open controls.
 
 ## API
 
@@ -95,7 +96,7 @@ Configuration is a JSON list and defaults to empty, preserving the certified glo
 SUPRACRAWL_EXTRACTION_DOMAIN_RULES=[]
 ```
 
-A rule must contain an exact DNS hostname and enable at least one primitive. IP literals, schemes, ports, paths, credentials, wildcards, unknown fields, duplicate normalized hosts, and no-op rules are rejected. Phase 4F ships no site-specific rule entries.
+A rule must contain an exact DNS hostname and enable at least one primitive. IP literals, schemes, ports, paths, credentials, wildcards, unknown fields, duplicate normalized hosts, and no-op rules are rejected. Phase 4F ships no site-specific rule entries, and Phase 4G leaves the admitted production rule set empty.
 
 ### Index
 
@@ -259,7 +260,7 @@ For orchestration, use `/v1/health` as liveness and `/v1/ready` as the traffic-a
 
 The Compose file exposes the Phase 4D scheduler settings but keeps scheduling disabled by default. To enable it, provide a non-empty JSON seed list and explicitly set `SUPRACRAWL_CRAWL_SCHEDULER_ENABLED=true`.
 
-The Compose file also exposes `SUPRACRAWL_EXTRACTION_DOMAIN_RULES` with an empty JSON-list default. Leaving it unset preserves the global extraction path; Phase 4F includes no built-in site-specific rule entries.
+The Compose file also exposes `SUPRACRAWL_EXTRACTION_DOMAIN_RULES` with an empty JSON-list default. Leaving it unset preserves the global extraction path; the certified Phase 4F capability includes no built-in site-specific rule entries, and Phase 4G does not populate the list.
 
 OpenSearch security is disabled in the provided single-node Compose configuration. That configuration is for local/self-hosted development on a trusted host; do not expose port 9200 to an untrusted network without enabling proper OpenSearch security and network controls.
 
@@ -371,7 +372,7 @@ The policy-only candidate `4f688d6983a209b2cee6e5dd378450e6b53ab559` passed the 
 
 No site-specific production rules, domain matching/precedence semantics, rule configuration surface, or production worker/extractor behavior were introduced by Phase 4E. The documentation/evidence-complete head `d30f755d19f97f2802a5dac4c7a347cfe0360bc3` passed two complete 9-workflow PR matrices with zero failures. PR #18 was merged using that exact head, producing `main` SHA `d9b3b25b8428fa2003a14099910d27ae2b326cf2`, which was independently certified with exactly 9/9 push workflows and zero failures.
 
-### Phase 4F — Production domain extraction-rule engine — current gate
+### Phase 4F — Production domain extraction-rule engine — certified
 
 Phase 4F implements only the two primitives selected by certified Phase 4E. `SUPRACRAWL_EXTRACTION_DOMAIN_RULES` is a JSON list that defaults to `[]`. Rules use exact normalized `FetchResult.final_url` host matching only: no wildcards, suffix inheritance, canonical-URL remapping, or precedence. The rule model rejects IP literals, malformed/wildcard hosts, unknown fields, duplicate normalized hosts and no-op rules.
 
@@ -379,14 +380,24 @@ Phase 4F implements only the two primitives selected by certified Phase 4E. `SUP
 
 The policy-only candidate `65e5743df35560d3610e8feec87b48713cafc9a9` passed the complete 9/9 workflow matrix before runtime work began. Two intermediate functional candidates, `f13a433f5917bc0e52a8e6a377f8535ae3c58206` and `20dce8b9ef376707194c1de47661d070e3c4052c`, were rejected because the CI Python job stopped at Ruff `I001`; the worker gate passed and neither candidate was accepted for certification. The corrected functional candidate `cfc5ddd889cb778f0d85151ad5a75bf1bee74eb9` then passed the complete 9/9 matrix with the full Python suite and worker smoke/evaluation gates green.
 
-The operational configuration candidate `880c58eaf4847e53f975e2ccd6c910176e7a5056` adds exactly one default-empty configuration line to `.env.example` and one to `docker-compose.yml` and independently passed the complete 9/9 matrix. Exact pre-merge evidence is frozen in `evaluation/phase4f_domain_rule_engine_report.json`. Phase 4F ships no site-specific rule entries and does not add `content_selector`, wildcard/suffix matching, a new endpoint, response fields, metrics, persistent state, crawler/scheduler behavior, indexing/retrieval behavior or ranking changes.
+The operational configuration candidate `880c58eaf4847e53f975e2ccd6c910176e7a5056` adds exactly one default-empty configuration line to `.env.example` and one to `docker-compose.yml` and independently passed the complete 9/9 matrix. Exact pre-merge evidence is frozen in `evaluation/phase4f_domain_rule_engine_report.json`. The documentation/evidence-complete head `0d0e6cd0651077c9ef12d77444acc1edc71d7fcf` then passed the complete 9/9 workflow matrix. PR #19 was merged using that exact head, producing `main` SHA `9ec6e9aae85dac6d68c7877d6385fa8ad4db64f5`, which was independently certified with exactly 9/9 push workflows and zero failures.
 
-Phase 4F remains open until this documentation/evidence-complete head passes the complete 9-workflow matrix, PR #19 is merged using that exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
+Phase 4F ships no site-specific rule entries and does not add `content_selector`, wildcard/suffix matching, a new endpoint, response fields, metrics, persistent state, crawler/scheduler behavior, indexing/retrieval behavior or ranking changes.
+
+### Phase 4G — Domain rule admission protocol — current gate
+
+Phase 4G changes no production extraction behavior. It adds a reusable, network-free evaluator and frozen self-test bundles for deciding whether a future exact-host site rule is justified. A candidate must first demonstrate that the certified no-rule baseline fails its preregistered marker contract, then strictly convert that bundle to pass while preserving all required markers, removing all forbidden markers, remaining deterministic, preserving nonmatching controls byte-for-byte, and satisfying exact-host isolation plus applicable fail-open controls.
+
+The protocol is limited to the certified Phase 4F primitives `remove_selectors` and `force_browser`. Combined candidates are reduced to the smallest passing primitive subset. `content_selector`, wildcard/suffix matching, new production rule semantics and production configuration changes remain out of scope. The protocol's self-test fixtures are explicitly not evidence for enabling real site rules.
+
+The policy-only candidate `77b3996d9c4ab89a6649abec57cb26ba6bcdbc11` passed the complete 9/9 workflow matrix before evaluator work began. The functional candidate `bad00ebfe296bdc9db8df8391a874c2a9e022697` then passed the complete 9/9 matrix. Its worker smoke emitted `PASS_DOMAIN_RULE_ADMISSION_PROTOCOL` using Readability `0.6.0`, JSDOM `26.1.0` and Turndown `7.2.4`; all positive and negative decisions matched, exact-host/canonical isolation passed, all four fail-open controls passed, the combined candidate reduced to `remove_selectors` alone, and the admitted production rule set remained exactly `[]`.
+
+The exact pre-merge evidence is frozen in `evaluation/phase4g_domain_rule_admission_report.json`. Phase 4G remains open until this documentation/evidence-complete head passes the complete 9-workflow matrix, PR #20 is merged using that exact head SHA, and the resulting merged `main` SHA independently passes exactly 9/9 push workflows with zero failures.
 
 ### Later measured work
 
 - distributed scheduling, leader election or cross-process deduplication only if multi-replica deployment measurements justify it;
-- site-specific rule entries, new extraction-rule primitives, or wildcard/suffix matching only after new preregistered evidence demonstrates need and fail-open behavior;
+- site-specific rule entries only through a new frozen real-domain evidence bundle that passes the certified Phase 4G admission protocol; new extraction-rule primitives or wildcard/suffix matching still require separate preregistration;
 - metrics export/aggregation or persistence only when deployment topology requires it;
 - persistent originals/provenance storage where justified;
 - scale-specific ANN/GPU work only when corpus/load measurements require it;
